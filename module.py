@@ -71,7 +71,7 @@ def get_cell(rnn_type, hidden_size, layer_num=1, dropout_keep_prob=None):
     return cell
 
 
-def dense(inputs, hidden, use_bias=True, scope="dense"):
+def dense(inputs, hidden, use_bias=True, scope='dense', initializer=None):
     with tf.variable_scope(scope):
         shape = tf.shape(inputs)
         dim = inputs.get_shape().as_list()[-1]
@@ -79,10 +79,10 @@ def dense(inputs, hidden, use_bias=True, scope="dense"):
         out_shape = [shape[idx] for idx in range(len(inputs.get_shape().as_list()) - 1)] + [hidden]
 
         flat_inputs = tf.reshape(inputs, [-1, dim])
-        W = tf.get_variable("W", [dim, hidden])
+        W = tf.get_variable('W', [dim, hidden], initializer=initializer)
         res = tf.matmul(flat_inputs, W)
         if use_bias:
-            b = tf.get_variable("b", [hidden], initializer=tf.constant_initializer(0.))
+            b = tf.get_variable('b', [hidden], initializer=tf.constant_initializer(0.))
             res = tf.nn.bias_add(res, b)
         res = tf.reshape(res, out_shape)
         return res

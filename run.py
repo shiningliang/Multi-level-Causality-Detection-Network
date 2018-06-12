@@ -5,8 +5,9 @@ import ujson as json
 import numpy as np
 import tensorflow as tf
 from preprocess import run_prepare
-from .models.BiLSTM import BasicBiLSTM
-from .models.CNN import BasicCNN
+from models.BiLSTM import BasicBiLSTM
+from models.CNN import BasicCNN
+from models.SelfAttentiveSentenceEmbedding import SelfAttentive
 from util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset
 import warnings
 
@@ -55,6 +56,10 @@ def parse_args():
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--layer_num', type=int, default=1,
                                 help='num of layers')
+    model_settings.add_argument('--sa_da', type=int, default=128,
+                                help='dim of self attentive da')
+    model_settings.add_argument('--sa_r', type=int, default=32,
+                                help='dim of self attentive r')
     model_settings.add_argument('--num_threads', type=int, default=8,
                                 help='Number of threads in input pipeline')
     model_settings.add_argument('--capacity', type=int, default=150000,
@@ -103,7 +108,8 @@ def train(args, file_paths, max_len):
     train_iterator = train_dataset.make_one_shot_iterator()
     test_iterator = test_dataset.make_one_shot_iterator()
     logger.info('Initialize the model...')
-    model = BasicCNN(args, iterator, max_len, token_embeddings, trainable=True)
+    # model = BasicBiLSTM(args, iterator, max_len, token_embeddings, trainable=True)
+    model = SelfAttentive(args, iterator, max_len, token_embeddings, logger)
     sess_config = tf.ConfigProto(allow_soft_placement=True)
     sess_config.gpu_options.allow_growth = True
 

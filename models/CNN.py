@@ -138,8 +138,8 @@ class BasicCNN(object):
             return losses
 
     def _compute_loss(self):
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(
-            logits=self.output, labels=tf.stop_gradient(tf.one_hot(self.labels, 2, axis=1)))))
+        self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+            logits=self.output, labels=tf.stop_gradient(tf.one_hot(self.labels, 2, axis=1))))
         # self.loss = self._focal_loss(tf.one_hot(self.labels, 2, axis=1), self.output)
         self.all_params = tf.trainable_variables()
         if self.weight_decay > 0:
