@@ -1,6 +1,6 @@
 import tensorflow as tf
 import time
-from module import rnn, dense
+from modules.rnn_module import rnn, dense
 
 
 class SelfAttentive(object):

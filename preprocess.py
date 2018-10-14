@@ -37,12 +37,12 @@ def stat(seq_length):
     plt.show()
 
 
-def preprocess_train(data_path, data_type):
+def preprocess_train(file_path, file_name, data_type, is_build):
     print("Generating {} examples...".format(data_type))
     examples = []
     eval_examples = {}
     engs, sims, labels = [], [], []
-    data_path = os.path.join(data_path, 'altlex_train_bootstrapped.tsv')
+    data_path = os.path.join(file_path, file_name)
     with open(data_path, 'r', encoding='utf8') as fh:
         for line in fh:
             line = line.strip().split('\t')
@@ -77,23 +77,24 @@ def preprocess_train(data_path, data_type):
                          'label': label})
         eval_examples[total] = label
         seq_len.append(len(sim))
-    # stat(seq_len)
+    stat(seq_len)
     # print('Get {} total examples'.format(total))
     # print('Get {} causal examples'.format(causal))
     # print('Get {} non-causal examples'.format(non_causal))
-    eng_sentences = [SPACE.join(tokens) for tokens in eng_filtered]
-    sim_sentences = [SPACE.join(tokens) for tokens in sim_filtered]
-    np.random.shuffle(examples)
+    if is_build:
+        sentences = [SPACE.join(tokens) for tokens in eng_filtered] + [SPACE.join(tokens) for tokens in sim_filtered]
+    else:
+        sentences = []
+    # np.random.shuffle(examples)
+    return examples, eval_examples, sentences, max(seq_len)
 
-    return examples, eval_examples, eng_sentences + sim_sentences, max(seq_len)
 
-
-def preprocess_test(data_path, data_type):
+def preprocess_eval(file_path, file_name, data_type, is_build):
     print("Generating {} examples...".format(data_type))
     examples = []
     eval_examples = {}
     sentences, labels = [], []
-    data_path = os.path.join(data_path, 'altlex_gold.tsv')
+    data_path = os.path.join(file_path, file_name)
     with open(data_path, 'r', encoding='utf8') as fh:
         for line in fh:
             line = line.strip().split('\t')
@@ -121,9 +122,11 @@ def preprocess_test(data_path, data_type):
     # print('Get {} total examples'.format(total))
     # print('Get {} causal examples'.format(causal))
     # print('Get {} non-causal examples'.format(non_causal))
-    eng_sentences = [SPACE.join(tokens) for tokens in sen_filtered]
-
-    return examples, eval_examples, eng_sentences
+    if is_build:
+        sentences = [SPACE.join(tokens) for tokens in sen_filtered]
+    else:
+        sentences = []
+    return examples, eval_examples, sentences
 
 
 def build_dict(data_path):
@@ -138,7 +141,6 @@ def build_dict(data_path):
                 else:
                     # 如果字典中不存在
                     dictionary[localkey] = fredist[localkey]  # 将当前词频添加到字典中
-
     return set(dictionary)
 
 
@@ -210,47 +212,35 @@ def build_features(samples, data_type, max_len, out_file, word2id):
 
 
 def run_prepare(config, flags):
-    train_examples, train_eval_examples, train_corpus, max_len = preprocess_train(config.raw_dir, 'train')
-    test_examples, test_eval_examples, test_corpus = preprocess_test(config.raw_dir, 'test')
-
-    # save(flags.corpus_file, train_corpus + test_corpus, 'corpus')
-    # corpus_dict = build_dict(flags.corpus_file)
-    token2id = None
-    flag = True
-    if os.path.isfile(flags.token2id_file):
-        flag = False
+    train_examples, train_labels, train_corpus, max_len = preprocess_train(config.raw_dir, config.train_file, 'train',
+                                                                           config.is_build)
+    valid_examples, valid_labels, valid_corpus = preprocess_eval(config.raw_dir, config.valid_file, 'valid',
+                                                                 config.is_build)
+    test_examples, test_labels, test_corpus = preprocess_eval(config.raw_dir, config.test_file, 'test', config.is_build)
+    if config.is_build:
+        save(flags.corpus_file, train_corpus, 'corpus')
+        corpus_dict = build_dict(flags.corpus_file)
+        token_emb_mat, token2id = get_embedding('word', corpus_dict, emb_file=flags.w2v_file,
+                                                vec_size=config.embed_size)
+        save(flags.token_emb_file, token_emb_mat, message='token embedding matrix')
+        save(flags.token2id_file, token2id, message='word2index')
+    else:
         with open(flags.token2id_file, 'r') as fh:
             token2id = json.load(fh)
-    # token_emb_mat, token2id = get_embedding('word', corpus_dict, emb_file=flags.w2v_file, vec_size=config.embed_size,
-    #                                         token2id_dict=token2id)
-    # save(flags.token_emb_file, token_emb_mat, message='token embedding')
-    # if flag:
-    #     save(flags.token2id_file, token2id, message='word2idx')
-    # del token_emb_mat
 
     train_meta = build_features(train_examples, 'train', 200, flags.train_record_file, token2id)
-    save(flags.train_eval_file, train_eval_examples, message='train eval')
+    save(flags.train_eval_file, train_labels, message='train eval')
     save(flags.train_meta, train_meta, message='train meta')
-    del train_examples, train_eval_examples, train_corpus
+    del train_examples, train_labels, train_corpus
+
+    valid_meta = build_features(valid_examples, 'valid', 200, flags.valid_record_file, token2id)
+    save(flags.valid_eval_file, valid_labels, message='valid eval')
+    save(flags.valid_meta, valid_meta, message='valid_meta')
+    del valid_examples, valid_labels, valid_corpus
 
     test_meta = build_features(test_examples, 'test', 200, flags.test_record_file, token2id)
-    save(flags.test_eval_file, test_eval_examples, message='test eval')
+    save(flags.test_eval_file, test_labels, message='test eval')
     save(flags.test_meta, test_meta, message='test meta')
-    del test_examples, test_eval_examples, test_corpus
+    del test_examples, test_labels, test_corpus
 
     save(flags.shape_meta, {'max_len': 200}, message='shape meta')
-
-# if __name__ == '__main__':
-#     root = os.getcwd()
-#     train_file = os.path.join(root, 'data/raw_data/altlex_train_bootstrapped.tsv')
-#     train_examples, train_eval_examples, train_corpus, max_len = preprocess_train(train_file, 'train')
-#     # train_meta = build_features(train_examples, max_len, 'train', flags.train_record_file, token2id)
-#     # save(flags.train_eval_file, train_eval_examples, message='train eval')
-#     # save(flags.train_meta, train_meta, message='train meta')
-#
-#     test_file = os.path.join(root, 'data/raw_data/altlex_gold.tsv')
-#     test_examples, test_eval_examples, test_corpus = preprocess_test(test_file, 'test')
-#     # test_meta = build_features(train_examples, max_len, 'train', flags.test_record_file, token2id)
-#     # save(flags.test_eval_file, test_eval_examples, message='test eval')
-#     # save(flags.test_meta, test_meta, message='test meta')
-#     save(os.path.join(root, 'data/processed_data/corpus.txt'), train_corpus + test_corpus, 'corpus')

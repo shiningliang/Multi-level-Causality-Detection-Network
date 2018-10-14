@@ -1,7 +1,7 @@
 import tensorflow as tf
 import logging
 import time
-from module import dense
+from modules.rnn_module import dense
 from tensorflow.python.ops import array_ops
 
 

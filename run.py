@@ -68,6 +68,14 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--raw_dir', default='data/raw_data',
                                help='the dir to store raw data')
+    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+                               help='the train file name')
+    path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
+                               help='the valid file name')
+    path_settings.add_argument('--test_file', default='altlex_gold.tsv',
+                               help='the test file name')
+    path_settings.add_argument('--is_build', action='store_true',
+                               help='whether to build word dict and embeddings')
     path_settings.add_argument('--processed_dir', default='data/processed_data',
                                help='the dir to store processed data')
     path_settings.add_argument('--model_dir', default='checkpoints/',
@@ -110,7 +118,9 @@ def train(args, file_paths, max_len):
     logger.info('Initialize the model...')
     # model = BasicBiLSTM(args, iterator, max_len, token_embeddings, trainable=True)
     model = SelfAttentive(args, iterator, max_len, token_embeddings, logger)
-    sess_config = tf.ConfigProto(allow_soft_placement=True)
+    sess_config = tf.ConfigProto(intra_op_parallelism_threads=8,
+                                 inter_op_parallelism_threads=8,
+                                 allow_soft_placement=True)
     sess_config.gpu_options.allow_growth = True
 
     max_train_acc, max_test_acc, max_p, max_r, max_f = 0, 0, 0, 0, 0
@@ -215,15 +225,15 @@ def run():
         def __init__(self):
             # 运行记录文件
             self.train_record_file = os.path.join(args.processed_dir, 'train.tfrecords')
-            # self.dev_record_file = os.path.join(args.preprocessed_dir, 'dev.tfrecords')
+            self.valid_record_file = os.path.join(args.processed_dir, 'valid.tfrecords')
             self.test_record_file = os.path.join(args.processed_dir, 'test.tfrecords')
             # 评估文件
             self.train_eval_file = os.path.join(args.processed_dir, 'train_eval.json')
-            # self.dev_eval_file = os.path.join(args.preprocessed_dir, 'dev_eval.json')
+            self.valid_eval_file = os.path.join(args.processed_dir, 'valid_eval.json')
             self.test_eval_file = os.path.join(args.processed_dir, 'test_eval.json')
             # 计数文件
             self.train_meta = os.path.join(args.processed_dir, 'train_meta.json')
-            # self.dev_meta = os.path.join(args.preprocessed_dir, 'dev_meta.json')
+            self.valid_meta = os.path.join(args.processed_dir, 'valid_meta.json')
             self.test_meta = os.path.join(args.processed_dir, 'test_meta.json')
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
