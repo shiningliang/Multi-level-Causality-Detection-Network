@@ -1,15 +1,15 @@
 import tensorflow as tf
+import tensorflow.contrib as tc
 import time
 from modules.rnn_module import rnn, dense
 
 
 class SelfAttentive(object):
-    def __init__(self, args, batch, max_len, token_embeddings, logger, trainable=True):
+    def __init__(self, args, batch, token_embeddings, logger, trainable=True):
         self.logger = logger
         # basic config
-        self.max_len = max_len
-        self.batch_size = args.batch_size
-        self.hidden_size = args.hidden_size
+        self.n_batch = tf.get_variable('n_batch', shape=[], dtype=tf.int32, trainable=False)
+        self.n_hidden = args.n_hidden
         self.layer_num = args.layer_num
         self.da = args.sa_da
         self.r = args.sa_r
@@ -20,9 +20,13 @@ class SelfAttentive(object):
         self.is_train = trainable
 
         self.eid, self.token_ids, self.token_len, self.labels = batch.get_next()
-        # self.batch_size = self.eid.get_shape().as_list()[0]
+        self.N = tf.shape(self.eid)[0]
+        self.max_len = tf.reduce_max(self.token_len)
+        self.token_ids = tf.slice(self.token_ids, [0, 0], tf.stack([self.N, self.max_len]))
         self.lr = tf.get_variable('lr', shape=[], dtype=tf.float32, trainable=False)
         self.is_train = tf.get_variable('is_train', shape=[], dtype=tf.bool, trainable=False)
+        self.global_step = tf.get_variable('global_step', shape=[], dtype=tf.int32,
+                                           initializer=tf.constant_initializer(0), trainable=False)
         self.initializer = tf.contrib.layers.xavier_initializer()
 
         self._build_graph(token_embeddings)
@@ -36,7 +40,7 @@ class SelfAttentive(object):
         self._penal_term()
         self._predict_label()
         self._compute_loss()
-        self._compute_accuracy()
+        # self._compute_accuracy()
         # 选择优化算法
         if self.is_train:
             self._create_train_op()
@@ -51,14 +55,14 @@ class SelfAttentive(object):
 
     def _encode(self):
         with tf.variable_scope('encoding', reuse=tf.AUTO_REUSE):
-            self.H, _ = rnn('bi-lstm', self.token_emb, self.token_len, self.hidden_size, self.layer_num)
+            self.H, _ = rnn('bi-lstm', self.token_emb, self.token_len, self.n_hidden, self.layer_num)
         if self.is_train:
             self.H = tf.nn.dropout(self.H, self.dropout_keep_prob)
 
     def _cal_attention(self):
         with tf.variable_scope('cal_attention', reuse=tf.AUTO_REUSE):
-            self.W_s1 = tf.get_variable('Ws1', shape=[2 * self.hidden_size, self.da], initializer=self.initializer)
-            self.W_s1_H = tf.nn.tanh(tf.matmul(tf.reshape(self.H, [-1, 2 * self.hidden_size]), self.W_s1))
+            self.W_s1 = tf.get_variable('Ws1', shape=[2 * self.n_hidden, self.da], initializer=self.initializer)
+            self.W_s1_H = tf.nn.tanh(tf.matmul(tf.reshape(self.H, [-1, 2 * self.n_hidden]), self.W_s1))
             self.W_s2 = tf.get_variable('Ws2', shape=[self.da, self.r], initializer=self.initializer)
             self.A = tf.matmul(self.W_s1_H, self.W_s2)
             # self.A_T = tf.nn.softmax(tf.reshape(self.A, shape=[-1, self.max_len, self.r]), dim=1, name='A_T')
@@ -73,22 +77,23 @@ class SelfAttentive(object):
         with tf.variable_scope('penalization_term', reuse=tf.AUTO_REUSE):
             self.A = tf.transpose(self.A_T, perm=[0, 2, 1])
             self.AA_T = tf.matmul(self.A, self.A_T)
-            # self.I = tf.reshape(tf.tile(tf.diag(tf.ones([self.r]), name='diag_identity'), [self.batch_size, 1]),
-            #                     [self.batch_size, self.r, self.r])
+            # self.I = tf.reshape(tf.tile(tf.diag(tf.ones([self.r]), name='diag_identity'), [self.n_batch, 1]),
+            #                     [self.n_batch, self.r, self.r])
             self.I = tf.diag(tf.ones([self.r]), name='diag_identity')
 
             self.penalized_term = tf.reduce_mean(tf.square(tf.norm(self.AA_T - self.I, ord='euclidean', axis=[1, 2])))
 
     def _predict_label(self):
         with tf.variable_scope('predict_labels', reuse=tf.AUTO_REUSE):
-            self.flatten_M_T = tf.reshape(self.M_T, shape=[-1, self.r * 2 * self.hidden_size])
-            self.label_dense_0 = tf.nn.relu(dense(self.flatten_M_T, hidden=2 * self.hidden_size, scope='dense_0'))
+            self.flatten_M_T = tf.reshape(self.M_T, shape=[-1, self.r * 2 * self.n_hidden])
+            self.label_dense_0 = tf.nn.relu(dense(self.flatten_M_T, hidden=2 * self.n_hidden, scope='dense_0'))
             if self.is_train:
                 self.label_dense_0 = tf.nn.dropout(self.label_dense_0, self.dropout_keep_prob)
 
             self.output = dense(self.label_dense_0, hidden=self.num_class, scope='output_labels')
 
     def _compute_loss(self):
+        self.pre_labels = tf.argmax(self.output, axis=1)
         self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=self.output, labels=tf.stop_gradient(tf.one_hot(self.labels, 2, axis=1))))
         self.loss += self.penalized_term
@@ -101,7 +106,6 @@ class SelfAttentive(object):
 
     def _compute_accuracy(self):
         with tf.name_scope('accuracy'):
-            self.pre_labels = tf.argmax(self.output, axis=1)
             correct_predictions = tf.equal(self.pre_labels, self.labels)
             self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, 'float'), name='accuracy')
 
@@ -110,15 +114,13 @@ class SelfAttentive(object):
             if self.opt_type == 'adagrad':
                 self.optimizer = tf.train.AdagradOptimizer(self.lr)
             elif self.opt_type == 'adam':
-                self.optimizer = tf.train.AdamOptimizer(self.lr)
+                self.optimizer = tc.opt.LazyAdamOptimizer(self.lr)
             elif self.opt_type == 'rprop':
                 self.optimizer = tf.train.RMSPropOptimizer(self.lr)
             elif self.opt_type == 'sgd':
                 self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
             else:
                 raise NotImplementedError('Unsupported optimizer: {}'.format(self.opt_type))
-            # self.train_op = self.optimizer.minimize(self.loss)
-            grads = self.optimizer.compute_gradients(self.loss)
-            gradients, variables = zip(*grads)
-            capped_grads, _ = tf.clip_by_global_norm(gradients, 5)
-            self.train_op = self.optimizer.apply_gradients(zip(capped_grads, variables))
+            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), 25)
+            self.train_op = self.optimizer.apply_gradients(zip(self.grads, self.all_params),
+                                                           global_step=self.global_step)

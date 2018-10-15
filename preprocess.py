@@ -77,7 +77,7 @@ def preprocess_train(file_path, file_name, data_type, is_build):
                          'label': label})
         eval_examples[total] = label
         seq_len.append(len(sim))
-    stat(seq_len)
+    # stat(seq_len)
     # print('Get {} total examples'.format(total))
     # print('Get {} causal examples'.format(causal))
     # print('Get {} non-causal examples'.format(non_causal))
@@ -85,7 +85,7 @@ def preprocess_train(file_path, file_name, data_type, is_build):
         sentences = [SPACE.join(tokens) for tokens in eng_filtered] + [SPACE.join(tokens) for tokens in sim_filtered]
     else:
         sentences = []
-    # np.random.shuffle(examples)
+    np.random.shuffle(examples)
     return examples, eval_examples, sentences, max(seq_len)
 
 
@@ -95,7 +95,7 @@ def preprocess_eval(file_path, file_name, data_type, is_build):
     eval_examples = {}
     sentences, labels = [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='utf8') as fh:
+    with open(data_path, 'r', encoding='ISO-8859-1') as fh:
         for line in fh:
             line = line.strip().split('\t')
             num = int(line[-1])
@@ -148,14 +148,14 @@ def save(filename, obj, message=None):
     if message is not None:
         print('Saving {}...'.format(message))
         if message == 'corpus':
-            with open(filename, 'a', encoding='utf8') as fh:
+            with open(filename, 'w', encoding='utf8') as fh:
                 fh.writelines([line + '\n' for line in obj])
         else:
             with open(filename, 'w', encoding='utf8') as fh:
                 json.dump(obj, fh)
 
 
-def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None, token2id_dict=None):
+def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
     embedding_dict = set()
     trained_embeddings = {}
@@ -167,15 +167,36 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None, token2id
         embedding_dict = set(trained_embeddings)
 
     filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
+    oov_tokens = corpus_dict.difference(filtered_tokens)
+    combined_tokens = []
+    for token in oov_tokens:
+        if len(token.split('-')) > 1:
+            combined_tokens.append(token)
+    combined_tokens = set(combined_tokens)
+    oov_tokens = oov_tokens.difference(combined_tokens)
+    print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens), len(combined_tokens), len(oov_tokens)))
     NULL = "<NULL>"
     OOV = "<OOV>"
-    token2id = {token: idx for idx, token in
-                enumerate(filtered_tokens, 2)} if token2id_dict is None else token2id_dict
+    token2id = {token: idx for idx, token in enumerate(filtered_tokens, 2)}
     token2id[NULL] = 0
     token2id[OOV] = 1
     embedding_mat = np.zeros([len(token2id), vec_size])
     for token in filtered_tokens:
         embedding_mat[token2id[token]] = trained_embeddings[token]
+    token_tail = len(token2id)
+    for token in combined_tokens:
+        tokens = token.split('-')
+        token_vec = np.zeros([vec_size])
+        in_emb = 0
+        for t in tokens:
+            if t in filtered_tokens:
+                token_vec += trained_embeddings[t]
+                in_emb += 1
+        if in_emb == 0:
+            continue
+        token2id[token] = token_tail
+        embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
+        token_tail += 1
     return embedding_mat, token2id
 
 
