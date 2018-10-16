@@ -64,8 +64,10 @@ def parse_args():
                                 help='Batch size of data set shuffle')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--embed_size', type=int, default=300,
+    model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
+    model_settings.add_argument('--pos', type=str, default='timing',
+                                help='the way of position embedding')
     model_settings.add_argument('--filter_sizes', type=list, default=[3, 4, 5],
                                 help='size of the filters')
     model_settings.add_argument('--num_filters', type=int, default=200,
@@ -74,12 +76,16 @@ def parse_args():
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--n_layer', type=int, default=1,
                                 help='num of layers')
+    model_settings.add_argument('--n_block', type=int, default=2,
+                                help='num of attention blocks')
     model_settings.add_argument('--sa_da', type=int, default=128,
                                 help='dim of self attentive da')
     model_settings.add_argument('--sa_r', type=int, default=32,
                                 help='dim of self attentive r')
-    model_settings.add_argument('--pos_weight', type=int, default=2,
+    model_settings.add_argument('--pos_weight', type=int, default=0,
                                 help='positive example weight')
+    model_settings.add_argument('--encoder_type', type=str, default='rnn',
+                                help='type of encoder layer')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--raw_dir', default='data/raw_data',

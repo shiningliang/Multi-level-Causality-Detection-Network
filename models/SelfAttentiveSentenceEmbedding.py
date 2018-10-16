@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib as tc
 import time
-from modules.rnn_module import rnn, dense
+from modules.rnn_module import cu_rnn, dense
 
 
 class SelfAttentive(object):
@@ -10,13 +10,15 @@ class SelfAttentive(object):
         # basic config
         self.n_batch = tf.get_variable('n_batch', shape=[], dtype=tf.int32, trainable=False)
         self.n_hidden = args.n_hidden
-        self.layer_num = args.layer_num
+        self.n_layer = args.n_layer
         self.da = args.sa_da
         self.r = args.sa_r
         self.num_class = 2
         self.opt_type = args.optim
+        self.pos_weight = args.pos_weight
         self.dropout_keep_prob = args.dropout_keep_prob
         self.weight_decay = args.weight_decay
+        self.norm = args.global_norm
         self.is_train = trainable
 
         self.eid, self.token_ids, self.token_len, self.labels = batch.get_next()
@@ -55,7 +57,7 @@ class SelfAttentive(object):
 
     def _encode(self):
         with tf.variable_scope('encoding', reuse=tf.AUTO_REUSE):
-            self.H, _ = rnn('bi-lstm', self.token_emb, self.token_len, self.n_hidden, self.layer_num)
+            self.H, _ = cu_rnn('bi-lstm', self.token_emb, self.n_hidden, self.n_batch, self.n_layer)
         if self.is_train:
             self.H = tf.nn.dropout(self.H, self.dropout_keep_prob)
 
@@ -94,8 +96,13 @@ class SelfAttentive(object):
 
     def _compute_loss(self):
         self.pre_labels = tf.argmax(self.output, axis=1)
-        self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-            logits=self.output, labels=tf.stop_gradient(tf.one_hot(self.labels, 2, axis=1))))
+        if self.pos_weight > 0:
+            self.loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.labels, 2),
+                                                                                logits=self.output,
+                                                                                pos_weight=self.pos_weight))
+        else:
+            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
+                                                                                      logits=self.output))
         self.loss += self.penalized_term
         # self.loss = self._focal_loss(tf.one_hot(self.labels, 2, axis=1), self.output)
         self.all_params = tf.trainable_variables()
@@ -121,6 +128,7 @@ class SelfAttentive(object):
                 self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
             else:
                 raise NotImplementedError('Unsupported optimizer: {}'.format(self.opt_type))
-            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), 25)
+            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.norm)
+            # self.grads = tf.gradients(self.loss, self.all_params)
             self.train_op = self.optimizer.apply_gradients(zip(self.grads, self.all_params),
                                                            global_step=self.global_step)

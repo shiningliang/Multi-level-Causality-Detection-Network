@@ -1,7 +1,7 @@
 import tensorflow as tf
 import logging
 import time
-from modules.rnn_module import rnn, dense
+from modules.rnn_module import cu_rnn, dense
 from tensorflow.python.ops import array_ops
 
 
@@ -48,7 +48,7 @@ class BasicBiLSTM(object):
 
     def _encode(self):
         with tf.variable_scope('encoding', reuse=tf.AUTO_REUSE):
-            self.seq_encode, _ = rnn('bi-lstm', self.token_emb, self.token_len, self.hidden_size, self.layer_num)
+            self.seq_encode, _ = cu_rnn('bi-lstm', self.token_emb, self.hidden_size, self.batch_size, self.layer_num)
         if self.is_train:
             self.seq_encode = tf.nn.dropout(self.seq_encode, self.dropout_keep_prob)
             # self.seq_encode = tf.reshape(self.seq_encode, [-1, 2 * self.hidden_size])
