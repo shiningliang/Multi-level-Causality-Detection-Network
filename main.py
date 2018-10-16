@@ -78,6 +78,8 @@ def parse_args():
                                 help='num of layers')
     model_settings.add_argument('--n_block', type=int, default=2,
                                 help='num of attention blocks')
+    model_settings.add_argument('--n_head', type=int, default=4,
+                                help='num of attention head')
     model_settings.add_argument('--sa_da', type=int, default=128,
                                 help='dim of self attentive da')
     model_settings.add_argument('--sa_r', type=int, default=32,

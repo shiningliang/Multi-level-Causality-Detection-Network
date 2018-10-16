@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib as tc
 import time
 from modules.nn_module import add_timing_signal
-from modules.rnn_module import cu_rnn
+from modules.rnn_module import cu_rnn, dense
 from modules.cnn_module import cnn
 from modules.nn_module import ffn, layer_norm, multihead_attention, residual_link
 
@@ -14,7 +14,6 @@ class MyModel(object):
         self.logger = logger
         # basic config
         self.n_batch = tf.get_variable('n_batch', shape=[], dtype=tf.int32, trainable=False)
-        self.n_label = args.n_class
         self.opt_type = args.optim
         self.weight_decay = args.weight_decay
 
@@ -71,20 +70,61 @@ class MyModel(object):
             elif self.args.encoder_type == 'ffn':
                 y = ffn(self.token_emb, int(self.args.n_emb * 2), self.args.n_emb,
                         self.args.dropout_keep_prob if self.is_train else 1)
-            self.token_emb = residual_link(self.token_emb, y, self.args.dropout_keep_prob if self.is_train else 1.0)
+            self.token_encoder = residual_link(self.token_emb, y, self.args.dropout_keep_prob if self.is_train else 1.0)
 
     def _self_attention(self):
         with tf.variable_scope('self attention'):
+            attn_bias = attention_bias(self.mask, 'mask')
             for i in range(self.args.n_block):
                 y = multihead_attention(
-                    x,
+                    self.token_encoder,
                     None,
                     attn_bias,
-                    params.attention_key_channels or params.hidden_size,
-                    params.attention_value_channels or params.hidden_size,
-                    params.hidden_size,
-                    params.num_heads,
-                    1.0 - params.attention_dropout,
-                    attention_function=params.attention_function
+                    self.args.n_hidden,
+                    self.args.n_hidden,
+                    self.args.n_hidden,
+                    self.args.n_head,
+                    self.args.dropout_keep_prob,
+                    attention_function='dot_product'
                 )
-                x = _residual_fn(x, y, params)
+                self.token_encoder = _residual_fn(self.token_encoder, y, params)
+
+    def _predict_label(self):
+        with tf.variable_scope('predict label'):
+            self.token_att = tf.reshape(self.token_encoder, shape=[self.N, self.max_len * self.n_emb])
+            self.outputs = dense(self.token_att, self.args.n_class, initializer=self.initializer)
+
+    def _compute_loss(self):
+        with tf.variable_scope('compute loss'):
+            self.pre_labels = tf.argmax(self.outputs, axis=1)
+            if self.args.pos_weight > 0:
+                self.loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.labels, 2),
+                                                                                    logits=self.outputs,
+                                                                                    pos_weight=self.pos_weight))
+            else:
+                self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
+                                                                                          logits=self.outputs))
+            # self.loss = self._focal_loss(tf.one_hot(self.labels, 2, axis=1), self.output)
+            self.all_params = tf.trainable_variables()
+            if self.args.weight_decay > 0:
+                with tf.variable_scope('l2_loss'):
+                    l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in self.all_params])
+                self.loss += self.args.weight_decay * l2_loss
+
+    def _create_train_op(self):
+        with tf.variable_scope('optimizer', reuse=tf.AUTO_REUSE):
+            opt_type = self.args.opt_type
+            if opt_type == 'adagrad':
+                self.optimizer = tf.train.AdagradOptimizer(self.lr)
+            elif opt_type == 'adam':
+                self.optimizer = tc.opt.LazyAdamOptimizer(self.lr)
+            elif opt_type == 'rprop':
+                self.optimizer = tf.train.RMSPropOptimizer(self.lr)
+            elif opt_type == 'sgd':
+                self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
+            else:
+                raise NotImplementedError('Unsupported optimizer: {}'.format(self.opt_type))
+            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.args.norm)
+            # self.grads = tf.gradients(self.loss, self.all_params)
+            self.train_op = self.optimizer.apply_gradients(zip(self.grads, self.all_params),
+                                                           global_step=self.global_step)

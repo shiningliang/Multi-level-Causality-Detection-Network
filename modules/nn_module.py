@@ -521,6 +521,29 @@ def attention_image_summary(attn, image_shapes=None):
     tf.summary.image("attention", image, max_outputs=1)
 
 
+def attention_bias(inputs, mode, inf=-1e9, name="attention_bias"):
+    with tf.name_scope(name, values=[inputs]):
+        if mode == "incremental":
+            length = inputs
+            lower_triangle = tf.matrix_band_part(
+                tf.ones([length, length]), -1, 0
+            )
+            ret = inf * (1.0 - lower_triangle)
+            return tf.reshape(ret, [1, 1, length, length])
+        elif mode == "masking":
+            mask = inputs
+            ret = (1.0 - mask) * inf
+            return tf.expand_dims(tf.expand_dims(ret, 1), 1)
+        elif mode == "proximal":
+            length = inputs
+            r = tf.to_float(tf.range(length))
+            diff = tf.expand_dims(r, 0) - tf.expand_dims(r, 1)
+            m = tf.expand_dims(tf.expand_dims(-tf.log(1 + tf.abs(diff)), 0), 0)
+            return m
+        else:
+            raise ValueError("Unknown mode %s" % mode)
+
+
 def residual_link(x, y, keep_prob):
     if keep_prob < 1.0:
         y = tf.nn.dropout(y, keep_prob)
