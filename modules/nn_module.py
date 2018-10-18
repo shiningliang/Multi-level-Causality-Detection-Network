@@ -30,7 +30,7 @@ def add_timing_signal(x, min_timescale=1.0, max_timescale=1.0e4):
     Returns:
         a Tensor the same shape as x.
     """
-    with tf.name_scope("add_timing_signal", values=[x]):
+    with tf.name_scope('timing_embedding', values=[x]):
         length = tf.shape(x)[1]
         channels = tf.shape(x)[2]
         position = tf.to_float(tf.range(length))
@@ -265,8 +265,8 @@ def layer_norm(inputs, epsilon=1e-6, data_format="NHWC"):
 
     scale = tf.get_variable("scale", shape=[channel_size], initializer=tf.ones_initializer())
     offset = tf.get_variable("offset", shape=[channel_size], initializer=tf.zeros_initializer())
-    mean = tf.reduce_mean(inputs, axis=axis, keep_dims=True)
-    variance = tf.reduce_mean(tf.square(inputs - mean), axis=axis, keep_dims=True)
+    mean = tf.reduce_mean(inputs, axis=axis, keepdims=True)
+    variance = tf.reduce_mean(tf.square(inputs - mean), axis=axis, keepdims=True)
     norm_inputs = (inputs - mean) * tf.rsqrt(variance + epsilon)
 
     return norm_inputs * scale + offset

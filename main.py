@@ -5,9 +5,8 @@ import ujson as json
 import numpy as np
 import tensorflow as tf
 from preprocess import run_prepare
-from models.BiLSTM import BasicBiLSTM
-from models.CNN import BasicCNN
-from models.SelfAttentiveSentenceEmbedding import SelfAttentive
+# from models.SelfAttentiveSentenceEmbedding import SelfAttentive
+from models.Hierarchical import MyModel
 from util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
 import warnings
 
@@ -64,30 +63,30 @@ def parse_args():
                                 help='Batch size of data set shuffle')
 
     model_settings = parser.add_argument_group('model settings')
+    model_settings.add_argument('--max_len', type=int, default=200,
+                                help='max sentence length')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--pos', type=str, default='timing',
-                                help='the way of position embedding')
+    model_settings.add_argument('--timing', type=bool, default=True,
+                                help='whether to use timing embedding')
+    model_settings.add_argument('--encoder_type', type=str, default='ffn',
+                                help='type of embeddings encoder')
+    model_settings.add_argument('--n_block', type=int, default=2,
+                                help='num of attention block')
+    model_settings.add_argument('--n_head', type=int, default=4,
+                                help='num of attention block')
     model_settings.add_argument('--filter_sizes', type=list, default=[3, 4, 5],
                                 help='size of the filters')
     model_settings.add_argument('--num_filters', type=int, default=200,
                                 help='num of the filters')
-    model_settings.add_argument('--n_hidden', type=int, default=128,
-                                help='size of LSTM hidden units')
     model_settings.add_argument('--n_layer', type=int, default=1,
                                 help='num of layers')
-    model_settings.add_argument('--n_block', type=int, default=2,
-                                help='num of attention blocks')
-    model_settings.add_argument('--n_head', type=int, default=4,
-                                help='num of attention head')
     model_settings.add_argument('--sa_da', type=int, default=128,
                                 help='dim of self attentive da')
     model_settings.add_argument('--sa_r', type=int, default=32,
                                 help='dim of self attentive r')
-    model_settings.add_argument('--pos_weight', type=int, default=0,
+    model_settings.add_argument('--pos_weight', type=int, default=2,
                                 help='positive example weight')
-    model_settings.add_argument('--encoder_type', type=str, default='rnn',
-                                help='type of encoder layer')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--raw_dir', default='data/raw_data',
@@ -142,8 +141,8 @@ def train(args, file_paths, max_len):
     train_iterator = train_dataset.make_one_shot_iterator()
     valid_iterator = valid_dataset.make_one_shot_iterator()
     logger.info('Initialize the model...')
-    # model = BasicBiLSTM(args, iterator, max_len, token_embeddings, trainable=True)
-    model = SelfAttentive(args, iterator, token_embeddings, logger)
+    # model = SelfAttentive(args, iterator, token_embeddings, logger)
+    model = MyModel(args, iterator, token_embeddings, logger)
     sess_config = tf.ConfigProto(intra_op_parallelism_threads=8,
                                  inter_op_parallelism_threads=8,
                                  allow_soft_placement=True)

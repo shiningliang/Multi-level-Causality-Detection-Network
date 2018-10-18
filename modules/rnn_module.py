@@ -59,6 +59,36 @@ def get_nor_cell(rnn_type, hidden_size, dropout_keep_prob=None):
     return cell
 
 
+# def cudnn_rnn(rnn_type, direction, inputs, hidden_size, dropout, num_layers):
+#     cell = get_cudnn_cell(rnn_type, num_layers, hidden_size, direction, dropout)
+#     output, states = cell(inputs)
+#     states = states[0]
+#     if direction == 'undirectional':
+#         states = tf.unstack(states, num=num_layers)
+#         return output, tuple(states)
+#     fw_states = []
+#     bw_states = []
+#     for i, state in enumerate(tf.unstack(states, num=2 * num_layers)):
+#         if i % 2 == 0:
+#             fw_states.append(state)
+#         else:
+#             bw_states.append(state)
+#
+#     return output, tuple(fw_states), tuple(bw_states)
+#
+#
+# def get_cudnn_cell(rnn_type, num_layers, hidden_size, direction, dropout):
+#     if rnn_type.endswith('lstm'):
+#         cudnn_cell = cudnn_rnn.CudnnLSTM(num_layers, hidden_size, direction=direction, dropout=dropout)
+#     elif rnn_type.endswith('gru'):
+#         cudnn_cell = cudnn_rnn.CudnnGRU(num_layers, hidden_size, direction=direction, dropout=dropout)
+#     elif rnn_type.endswith('rnn'):
+#         cudnn_cell = cudnn_rnn.CudnnRNNTanh(num_layers, hidden_size, direction=direction, dropout=dropout)
+#     else:
+#         raise NotImplementedError('Unsuported rnn type: {}'.format(rnn_type))
+#     return cudnn_cell
+
+
 def cu_rnn(rnn_type, inputs, hidden_size, batch_size, layer_num=1):
     if not rnn_type.startswith('bi'):
         cell = get_cu_cell(rnn_type, hidden_size, layer_num, cudnn_rnn.CUDNN_RNN_UNIDIRECTION)
@@ -70,7 +100,7 @@ def cu_rnn(rnn_type, inputs, hidden_size, batch_size, layer_num=1):
             c, h = state
             state = h
     else:
-        cell = get_cu_cell(rnn_type, hidden_size, layer_num, cudnn_rnn.CUDNN_RNN_BIDIRECTION)
+        cell = get_cu_cell(rnn_type, hidden_size, layer_num, 'bidirectional')
         inputs = tf.transpose(inputs, [1, 0, 2])
         outputs, state = cell(inputs)
         # if concat:
@@ -81,7 +111,7 @@ def cu_rnn(rnn_type, inputs, hidden_size, batch_size, layer_num=1):
     return outputs, state
 
 
-def get_cu_cell(rnn_type, hidden_size, layer_num=1, direction=cudnn_rnn.CUDNN_RNN_UNIDIRECTION):
+def get_cu_cell(rnn_type, hidden_size, layer_num=1, direction='undirectional'):
     if rnn_type.endswith('lstm'):
         cudnn_cell = cudnn_rnn.CudnnLSTM(num_layers=layer_num, num_units=hidden_size, direction=direction,
                                          dropout=0)
