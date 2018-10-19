@@ -47,7 +47,7 @@ def parse_args():
                                 help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--global_norm', type=int, default=0,
+    train_settings.add_argument('--global_norm', type=int, default=25,
                                 help='clip gradient norm')
     train_settings.add_argument('--train_batch', type=int, default=64,
                                 help='train batch size')
