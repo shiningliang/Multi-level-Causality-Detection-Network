@@ -126,7 +126,9 @@ class MyModel(object):
                 self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
             else:
                 raise NotImplementedError('Unsupported optimizer: {}'.format(self.opt_type))
-            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.args.global_norm)
-            # self.grads = tf.gradients(self.loss, self.all_params)
+            if self.args.global_norm > 0:
+                self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.args.global_norm)
+            else:
+                self.grads = tf.gradients(self.loss, self.all_params)
             self.train_op = self.optimizer.apply_gradients(zip(self.grads, self.all_params),
                                                            global_step=self.global_step)
