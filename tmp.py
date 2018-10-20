@@ -64,14 +64,27 @@ def process_test(path):
     return sentences, labels
 
 
-def seg_max(sentences):
-    max_b, max_l, max_a = 0, 0, 0
+def seg_length(sentences):
+    seg_len = []
     for sen in sentences:
-        max_b = max(max_b, len(sen[0]))
-        max_l = max(max_l, len(sen[1]))
-        max_a = max(max_a, len(sen[2]))
+        seg_len.append((len(sen[0]), len(sen[1]), len(sen[2])))
+    return seg_len
 
-    return max_b, max_l, max_a
+
+def gen_annotation(eng_length, sim_length, max_length, path, labels):
+    with open(os.path.join(path, 'annotations.txt'), 'w', encoding='utf8') as f:
+        for el, sl, label in eng_length, sim_length, labels:
+            pre, alt, cur = el
+            if sum(el) > max_length:
+                cur -= pre + alt + cur - max_length
+            annos = 'O ' * pre + 'A ' if label == 1 else 'NA ' * alt + 'O ' * cur
+            f.write(annos.strip() + '\n')
+            pre, alt, cur = sl
+            if sum(sl) > max_length:
+                cur -= pre + alt + cur - max_length
+            annos = 'O ' * pre + 'A ' if label == 1 else 'NA ' * alt + 'O ' * cur
+            f.write(annos.strip() + '\n')
+    f.close()
 
 
 engs, sims, labels = process_train(train_path)
@@ -82,7 +95,9 @@ english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '
 seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in engs]
 seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim in sims]
 
-emax_b, emax_l, emax_a = seg_max(seg_eng_filtered)
-smax_b, smax_l, smax_a = seg_max(seg_sim_filtered)
+eng_len = seg_length(seg_eng_filtered)
+sim_len = seg_length(seg_sim_filtered)
+
+gen_annotation(eng_len, sim_len, 200, data_path, labels)
 
 print('hello world')

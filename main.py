@@ -31,29 +31,29 @@ def parse_args():
                         help='specify gpu device')
 
     train_settings = parser.add_argument_group('train settings')
-    train_settings.add_argument('--num_steps', type=int, default=16000,
+    train_settings.add_argument('--num_steps', type=int, default=32000,
                                 help='num of step')
-    train_settings.add_argument('--period', type=int, default=400,
+    train_settings.add_argument('--period', type=int, default=800,
                                 help='period to save batch loss')
-    train_settings.add_argument('--checkpoint', type=int, default=1600,
+    train_settings.add_argument('--checkpoint', type=int, default=3200,
                                 help='checkpoint for evaluation')
-    train_settings.add_argument('--eval_num_batches', type=int, default=10,
+    train_settings.add_argument('--eval_num_batches', type=int, default=20,
                                 help='num of batches for evaluation')
     train_settings.add_argument('--optim', default='adam',
                                 help='optimizer type')
     train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0001,
+    train_settings.add_argument('--weight_decay', type=float, default=0.0002,
                                 help='weight decay')
-    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5,
+    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.65,
                                 help='dropout keep rate')
     train_settings.add_argument('--global_norm', type=int, default=25,
                                 help='clip gradient norm')
-    train_settings.add_argument('--train_batch', type=int, default=64,
+    train_settings.add_argument('--train_batch', type=int, default=32,
                                 help='train batch size')
     train_settings.add_argument('--valid_batch', type=int, default=32,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=20,
+    train_settings.add_argument('--epochs', type=int, default=10,
                                 help='train epochs')
     train_settings.add_argument('--patience', type=int, default=2,
                                 help='num of epochs for train patients')
