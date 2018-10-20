@@ -73,16 +73,20 @@ def seg_length(sentences):
 
 def gen_annotation(eng_length, sim_length, max_length, path, labels):
     with open(os.path.join(path, 'annotations.txt'), 'w', encoding='utf8') as f:
-        for el, sl, label in eng_length, sim_length, labels:
+        for el, sl, label in zip(eng_length, sim_length, labels):
             pre, alt, cur = el
             if sum(el) > max_length:
                 cur -= pre + alt + cur - max_length
-            annos = 'O ' * pre + 'A ' if label == 1 else 'NA ' * alt + 'O ' * cur
+            annos = 'O ' * pre
+            annos += 'C ' if label == 1 else 'NC ' * alt
+            annos += 'O ' * cur
             f.write(annos.strip() + '\n')
             pre, alt, cur = sl
             if sum(sl) > max_length:
                 cur -= pre + alt + cur - max_length
-            annos = 'O ' * pre + 'A ' if label == 1 else 'NA ' * alt + 'O ' * cur
+            annos = 'O ' * pre
+            annos += 'C ' if label == 1 else 'NC ' * alt
+            annos += 'O ' * cur
             f.write(annos.strip() + '\n')
     f.close()
 
