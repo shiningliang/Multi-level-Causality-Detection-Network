@@ -21,6 +21,8 @@ def parse_args():
     parser = argparse.ArgumentParser('Causality identification on AltLex')
     parser.add_argument('--prepare', action='store_true',
                         help='create the directories, prepare the vocabulary and embeddings')
+    parser.add_argument('--is_build', action='store_true',
+                        help='whether to build word dict and embeddings')
     parser.add_argument('--train', action='store_true',
                         help='train the model')
     parser.add_argument('--evaluate', action='store_true',
@@ -31,25 +33,25 @@ def parse_args():
                         help='specify gpu device')
 
     train_settings = parser.add_argument_group('train settings')
-    train_settings.add_argument('--num_steps', type=int, default=32000,
+    train_settings.add_argument('--num_steps', type=int, default=16000,
                                 help='num of step')
-    train_settings.add_argument('--period', type=int, default=800,
+    train_settings.add_argument('--period', type=int, default=400,
                                 help='period to save batch loss')
-    train_settings.add_argument('--checkpoint', type=int, default=3200,
+    train_settings.add_argument('--checkpoint', type=int, default=1600,
                                 help='checkpoint for evaluation')
-    train_settings.add_argument('--eval_num_batches', type=int, default=20,
+    train_settings.add_argument('--eval_num_batches', type=int, default=10,
                                 help='num of batches for evaluation')
     train_settings.add_argument('--optim', default='adam',
                                 help='optimizer type')
     train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0002,
+    train_settings.add_argument('--weight_decay', type=float, default=0.0001,
                                 help='weight decay')
-    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.65,
+    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--global_norm', type=int, default=25,
+    train_settings.add_argument('--global_norm', type=int, default=36,
                                 help='clip gradient norm')
-    train_settings.add_argument('--train_batch', type=int, default=32,
+    train_settings.add_argument('--train_batch', type=int, default=64,
                                 help='train batch size')
     train_settings.add_argument('--valid_batch', type=int, default=32,
                                 help='dev batch size')
@@ -81,6 +83,8 @@ def parse_args():
                                 help='num of the filters')
     model_settings.add_argument('--n_layer', type=int, default=1,
                                 help='num of layers')
+    model_settings.add_argument('--alpha', type=float, default=1.0,
+                                help='coefficient for altlex extraction loss')
     model_settings.add_argument('--sa_da', type=int, default=128,
                                 help='dim of self attentive da')
     model_settings.add_argument('--sa_r', type=int, default=32,
@@ -97,8 +101,6 @@ def parse_args():
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_gold.tsv',
                                help='the test file name')
-    path_settings.add_argument('--is_build', action='store_true',
-                               help='whether to build word dict and embeddings')
     path_settings.add_argument('--processed_dir', default='data/processed_data',
                                help='the dir to store processed data')
     path_settings.add_argument('--model_dir', default='checkpoints/',
@@ -120,6 +122,7 @@ def train(args, file_paths, max_len):
     logger.info('Loading train eval file...')
     with open(file_paths.train_eval_file, 'r') as fh:
         train_eval_file = json.load(fh)
+    # TODO
     with open(file_paths.test_eval_file, 'r') as fh:
         valid_eval_file = json.load(fh)
     logger.info('Loading train meta...')

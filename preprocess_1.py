@@ -295,11 +295,12 @@ def gen_annotation(segs, max_length, filename, labels, data_type):
         f.close()
 
 
-def build_features(samples, data_type, max_len, out_file, word2id):
+def build_features(samples, data_type, max_len, out_file, word2id, annotation_file=None):
     print("Processing {} examples...".format(data_type))
     writer = tf.python_io.TFRecordWriter(out_file)
     total = 0
     meta = {}
+    fh = open(annotation_file, 'r', encoding='utf8')
     for sample in tqdm(samples):
         total += 1
         token_ids = np.zeros([max_len], dtype=np.int32)
@@ -318,7 +319,8 @@ def build_features(samples, data_type, max_len, out_file, word2id):
             'eid': tf.train.Feature(int64_list=tf.train.Int64List(value=[sample['eid']])),
             'token_ids': tf.train.Feature(bytes_list=tf.train.BytesList(value=[token_ids.tostring()])),
             'token_len': tf.train.Feature(int64_list=tf.train.Int64List(value=[seq_len])),
-            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[sample['label']])),
+            'cu_label': tf.train.Feature(int64_list=tf.train.Int64List(value=[sample['label']])),
+            'alt_label': tf.train.Feature(int64_list=tf.train.BytesList(value=[sample['label']])),
         }))
         writer.write(record.SerializeToString())
     print('Build {} instances of features in total'.format(total))
@@ -332,8 +334,8 @@ def run_prepare(config, flags):
                                                                                                    config.train_file,
                                                                                                    'train',
                                                                                                    config.is_build)
-    valid_examples, valid_evals, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir,
-                                                                                         config.valid_file, 'valid')
+    # valid_examples, valid_evals, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir,
+    #                                                                                      config.valid_file, 'valid')
     test_examples, test_evals, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                                     'test', config.is_build)
     if config.is_build:
@@ -351,17 +353,17 @@ def run_prepare(config, flags):
         with open(flags.token2id_file, 'r') as fh:
             token2id = json.load(fh)
 
-    train_meta = build_features(train_examples, 'train', 200, flags.train_record_file, token2id)
+    train_meta = build_features(train_examples, 'train', 200, flags.train_record_file, token2id, flags.train_annotation)
     save(flags.train_eval_file, train_evals, message='train eval')
     save(flags.train_meta, train_meta, message='train meta')
     del train_examples, train_evals, train_corpus
 
-    valid_meta = build_features(valid_examples, 'valid', 200, flags.valid_record_file, token2id)
-    save(flags.valid_eval_file, valid_evals, message='valid eval')
-    save(flags.valid_meta, valid_meta, message='valid_meta')
-    del valid_examples, valid_evals, valid_corpus
+    # valid_meta = build_features(valid_examples, 'valid', 200, flags.valid_record_file, token2id)
+    # save(flags.valid_eval_file, valid_evals, message='valid eval')
+    # save(flags.valid_meta, valid_meta, message='valid_meta')
+    # del valid_examples, valid_evals, valid_corpus
 
-    test_meta = build_features(test_examples, 'test', 200, flags.test_record_file, token2id)
+    test_meta = build_features(test_examples, 'test', 200, flags.test_record_file, token2id, flags.test_annotation)
     save(flags.test_eval_file, test_evals, message='test eval')
     save(flags.test_meta, test_meta, message='test meta')
     del test_examples, test_evals, test_corpus

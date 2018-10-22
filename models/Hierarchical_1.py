@@ -18,7 +18,7 @@ class MyModel(object):
         self.opt_type = args.optim
         self.weight_decay = args.weight_decay
 
-        self.eid, self.token_ids, self.token_len, self.labels = batch.get_next()
+        self.eid, self.token_ids, self.token_len, self.cau_labels, self.alt_labels = batch.get_next()
         self.N = tf.shape(self.eid)[0]
         # self.max_len = tf.reduce_max(self.token_len)
         # self.token_ids = tf.slice(self.token_ids, [0, 0], tf.stack([self.N, self.max_len]))
@@ -36,7 +36,8 @@ class MyModel(object):
         self._embed(token_embeddings)
         self._encoder()
         self._self_attention()
-        self._predict_label()
+        self._predict_causality()
+        self._extract_altlex()
         self._compute_loss()
         # self._compute_accuracy()
         # 选择优化算法
@@ -92,20 +93,29 @@ class MyModel(object):
                     )
                     self.token_encoder = residual_link(self.token_encoder, y, self.args.dropout_keep_prob)
 
-    def _predict_label(self):
-        with tf.variable_scope('predict_labels'):
-            self.token_att = tf.reshape(self.token_encoder, shape=[self.N, self.args.max_len * self.n_hidden])
-            self.outputs = dense(self.token_att, self.n_class, initializer=self.initializer)
+    def _predict_causality(self):
+        with tf.variable_scope('predict_causality'):
+            self.token_pre = tf.reshape(self.token_encoder, [self.N, self.args.max_len * self.n_hidden])
+            self.cau_outputs = dense(self.token_pre, self.n_class, initializer=self.initializer)
+
+    def _extract_altlex(self):
+        with tf.variable_scope('extract_altlex'):
+            self.token_ext = tf.reshape(self.token_encoder, [-1, self.n_hidden])
+            self.alt_outputs = dense(self.token_ext, 3, initializer=self.initializer)
+            self.alt_outputs = tf.reshape(self.alt_outputs, tf.stack([-1, self.args.max_len, 3]))
 
     def _compute_loss(self):
-        self.pre_labels = tf.argmax(self.outputs, axis=1)
+        self.pred_cau = tf.argmax(self.cau_outputs, axis=1)
+        self.pred_alt = tf.argmax(self.alt_outputs, axis=2)
+        self.loss = self.args.alpha * tc.seq2seq.sequence_loss(logits=self.alt_outputs, targets=self.alt_labels,
+                                                               weights=self.mask)
         if self.args.pos_weight > 0:
-            self.loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.labels, 2),
-                                                                                logits=self.outputs,
-                                                                                pos_weight=self.args.pos_weight))
+            self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.cau_labels, 2),
+                                                                                 logits=self.cau_outputs,
+                                                                                 pos_weight=self.args.pos_weight))
         else:
-            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
-                                                                                      logits=self.outputs))
+            self.loss += tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.cau_labels,
+                                                                                       logits=self.cau_outputs))
         # self.loss = self._focal_loss(tf.one_hot(self.labels, 2, axis=1), self.output)
         self.all_params = tf.trainable_variables()
         if self.args.weight_decay > 0:
