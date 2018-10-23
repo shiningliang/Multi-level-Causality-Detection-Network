@@ -7,8 +7,8 @@ from modules.cnn_module import cnn
 from modules.nn_module import ffn, multihead_attention, attention_bias, residual_link
 
 
-class MyModel(object):
-    def __init__(self, args, batch, token_embeddings, logger):
+class H0(object):
+    def __init__(self, args, batch, token_embeddings, logger, trainable=True):
         # logging
         self.args = args
         self.logger = logger
@@ -23,26 +23,25 @@ class MyModel(object):
         # self.max_len = tf.reduce_max(self.token_len)
         # self.token_ids = tf.slice(self.token_ids, [0, 0], tf.stack([self.N, self.max_len]))
         self.mask = tf.sequence_mask(self.token_len, self.args.max_len, dtype=tf.float32, name='masks')
-        self.lr = tf.get_variable('lr', shape=[], dtype=tf.float32, trainable=False)
         self.is_train = tf.get_variable('is_train', shape=[], dtype=tf.bool, trainable=False)
         self.global_step = tf.get_variable('global_step', shape=[], dtype=tf.int32,
                                            initializer=tf.constant_initializer(0), trainable=False)
         self.initializer = tf.contrib.layers.xavier_initializer()
 
+        start_t = time.time()
         self._build_graph(token_embeddings)
+        if trainable:
+            self.lr = tf.get_variable('lr', shape=[], dtype=tf.float32, trainable=False)
+            self._create_train_op()
+        self.logger.info('Time to build graph: {} s'.format(time.time() - start_t))
 
     def _build_graph(self, token_embeddings):
-        start_t = time.time()
         self._embed(token_embeddings)
         self._encoder()
         self._self_attention()
         self._predict_label()
         self._compute_loss()
         # self._compute_accuracy()
-        # 选择优化算法
-        if self.is_train:
-            self._create_train_op()
-        self.logger.info('Time to build graph: {} s'.format(time.time() - start_t))
 
     def _embed(self, token_embeddings):
         with tf.device('/cpu:0'), tf.variable_scope('word_embedding', reuse=tf.AUTO_REUSE):
@@ -87,10 +86,11 @@ class MyModel(object):
                         self.args.n_emb,
                         self.n_hidden,
                         self.args.n_head,
-                        self.args.dropout_keep_prob,
+                        self.args.dropout_keep_prob if self.is_train else 1.0,
                         attention_function='dot_product'
                     )
-                    self.token_encoder = residual_link(self.token_encoder, y, self.args.dropout_keep_prob)
+                    self.token_encoder = residual_link(self.token_encoder, y,
+                                                       self.args.dropout_keep_prob if self.is_train else 1.0)
 
     def _predict_label(self):
         with tf.variable_scope('predict_labels'):

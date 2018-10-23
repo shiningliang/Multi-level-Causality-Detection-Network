@@ -6,7 +6,8 @@ import numpy as np
 import tensorflow as tf
 from preprocess import run_prepare
 # from models.SelfAttentiveSentenceEmbedding import SelfAttentive
-from models.Hierarchical import MyModel
+from models.Hierarchical import H0
+from models.Hierarchical_2 import H2
 from util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
 import warnings
 
@@ -61,7 +62,7 @@ def parse_args():
                                 help='num of epochs for train patients')
     train_settings.add_argument('--num_threads', type=int, default=8,
                                 help='Number of threads in input pipeline')
-    train_settings.add_argument('--capacity', type=int, default=150000,
+    train_settings.add_argument('--capacity', type=int, default=100000,
                                 help='Batch size of data set shuffle')
 
     model_settings = parser.add_argument_group('model settings')
@@ -145,7 +146,8 @@ def train(args, file_paths, max_len):
     valid_iterator = valid_dataset.make_one_shot_iterator()
     logger.info('Initialize the model...')
     # model = SelfAttentive(args, iterator, token_embeddings, logger)
-    model = MyModel(args, iterator, token_embeddings, logger)
+    # model = H0(args, iterator, token_embeddings, logger)
+    model = H2(args, iterator, token_embeddings, logger)
     sess_config = tf.ConfigProto(intra_op_parallelism_threads=8,
                                  inter_op_parallelism_threads=8,
                                  allow_soft_placement=True)
@@ -188,20 +190,20 @@ def train(args, file_paths, max_len):
                 for s in summ:
                     writer.add_summary(s, step)
                 writer.flush()
-                # f1 = valid_metrics['f1']
-                # if f1 > f1_save:
-                #     f1_save = f1
-                #     patience = 0
-                # else:
-                #     patience += 1
-                # if patience >= args.patience:
-                #     lr /= 2.0
-                #     logger.info('Learning rate reduced to {}'.format(lr))
-                #     f1_save = f1
-                #     patience = 0
-                # sess.run(tf.assign(model.lr, tf.constant(lr, dtype=tf.float32)))
-                lr_decay = 0.9 ** max(epoch - 5, 0)
-                sess.run(tf.assign(model.lr, tf.constant(lr * lr_decay, dtype=tf.float32)))
+                f1 = valid_metrics['f1']
+                if f1 > f1_save:
+                    f1_save = f1
+                    patience = 0
+                else:
+                    patience += 1
+                if patience >= args.patience:
+                    lr /= 2.0
+                    logger.info('Learning rate reduced to {}'.format(lr))
+                    f1_save = f1
+                    patience = 0
+                sess.run(tf.assign(model.lr, tf.constant(lr, dtype=tf.float32)))
+                # lr_decay = 0.9 ** max(epoch - 5, 0)
+                # sess.run(tf.assign(model.lr, tf.constant(lr * lr_decay, dtype=tf.float32)))
                 max_acc = max(valid_metrics['acc'], max_acc)
                 max_p = max(valid_metrics['precision'], max_p)
                 max_r = max(valid_metrics['recall'], max_r)
@@ -209,9 +211,10 @@ def train(args, file_paths, max_len):
                 valid_sum = valid_metrics['precision'] + valid_metrics['recall'] + valid_metrics['f1']
                 if valid_sum > max_sum:
                     max_sum = valid_sum
-                    max_epoch = step // args.checkpoint
+                    max_epoch = epoch
                     # filename = os.path.join(args.model_dir, "model_{}.ckpt".format(global_step))
                     # saver.save(sess, filename)
+                epoch += 1
         logger.info('Max Acc {} Max Precision {} Max Recall {} Max F1 {}'.format(max_acc, max_p, max_r, max_f))
         logger.info('Max epoch {}'.format(max_epoch))
 

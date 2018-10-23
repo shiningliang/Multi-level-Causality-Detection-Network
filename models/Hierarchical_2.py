@@ -5,10 +5,11 @@ from modules.nn_module import add_timing_signal
 from modules.rnn_module import cu_rnn, dense
 from modules.cnn_module import cnn
 from modules.nn_module import ffn, multihead_attention, attention_bias, residual_link
+from modules.attention_module import self_transformer
 
 
-class H1(object):
-    def __init__(self, args, batch, token_embeddings, logger):
+class H2(object):
+    def __init__(self, args, batch, token_embeddings, logger, trainable=True):
         # logging
         self.args = args
         self.logger = logger
@@ -18,32 +19,30 @@ class H1(object):
         self.opt_type = args.optim
         self.weight_decay = args.weight_decay
 
-        self.eid, self.token_ids, self.token_len, self.cau_labels, self.alt_labels = batch.get_next()
+        self.eid, self.token_ids, self.token_len, self.labels = batch.get_next()
         self.N = tf.shape(self.eid)[0]
         # self.max_len = tf.reduce_max(self.token_len)
         # self.token_ids = tf.slice(self.token_ids, [0, 0], tf.stack([self.N, self.max_len]))
         self.mask = tf.sequence_mask(self.token_len, self.args.max_len, dtype=tf.float32, name='masks')
-        self.lr = tf.get_variable('lr', shape=[], dtype=tf.float32, trainable=False)
         self.is_train = tf.get_variable('is_train', shape=[], dtype=tf.bool, trainable=False)
         self.global_step = tf.get_variable('global_step', shape=[], dtype=tf.int32,
                                            initializer=tf.constant_initializer(0), trainable=False)
         self.initializer = tf.contrib.layers.xavier_initializer()
 
+        start_t = time.time()
         self._build_graph(token_embeddings)
+        if trainable:
+            self.lr = tf.get_variable('lr', shape=[], dtype=tf.float32, trainable=False)
+            self._create_train_op()
+        self.logger.info('Time to build graph: {} s'.format(time.time() - start_t))
 
     def _build_graph(self, token_embeddings):
-        start_t = time.time()
         self._embed(token_embeddings)
         self._encoder()
         self._self_attention()
-        self._predict_causality()
-        self._extract_altlex()
+        self._predict_label()
         self._compute_loss()
         # self._compute_accuracy()
-        # 选择优化算法
-        if self.is_train:
-            self._create_train_op()
-        self.logger.info('Time to build graph: {} s'.format(time.time() - start_t))
 
     def _embed(self, token_embeddings):
         with tf.device('/cpu:0'), tf.variable_scope('word_embedding', reuse=tf.AUTO_REUSE):
@@ -51,15 +50,15 @@ class H1(object):
                                               initializer=tf.constant(token_embeddings, dtype=tf.float32),
                                               trainable=False)
             self.token_emb = tf.nn.embedding_lookup(word_embeddings, self.token_ids)
-            if self.args.timing:
-                self.token_emb = add_timing_signal(self.token_emb)
-            else:
-                pos_embeddings = tf.get_variable('position_embedding', [200, self.args.n_emb],
-                                                 initializer=tf.random_normal_initializer(0.0, self.args.n_emb ** -0.5))
-                indices = tf.range(tf.shape(self.token_ids)[1])[None, :]
-                pos_emb = tf.gather(pos_embeddings, indices)
-                pos_emb = tf.tile(pos_emb, [tf.shape(self.token_ids)[0], 1, 1])
-                self.token_emb += pos_emb
+            # if self.args.timing:
+            #     self.token_emb = add_timing_signal(self.token_emb)
+            # else:
+            #     pos_embeddings = tf.get_variable('position_embedding', [200, self.args.n_emb],
+            #                                      initializer=tf.random_normal_initializer(0.0, self.args.n_emb ** -0.5))
+            #     indices = tf.range(tf.shape(self.token_ids)[1])[None, :]
+            #     pos_emb = tf.gather(pos_embeddings, indices)
+            #     pos_emb = tf.tile(pos_emb, [tf.shape(self.token_ids)[0], 1, 1])
+            #     self.token_emb += pos_emb
             if self.is_train:
                 self.token_emb = tf.nn.dropout(self.token_emb, self.args.dropout_keep_prob)
 
@@ -76,46 +75,24 @@ class H1(object):
 
     def _self_attention(self):
         with tf.variable_scope('self_attention'):
-            attn_bias = attention_bias(self.mask, 'masking')
-            self.n_hidden = self.args.n_emb
-            for i in range(self.args.n_block):
-                with tf.variable_scope('block_{}'.format(i)):
-                    y = multihead_attention(
-                        self.token_encoder,
-                        None,
-                        attn_bias,
-                        self.args.n_emb,
-                        self.args.n_emb,
-                        self.n_hidden,
-                        self.args.n_head,
-                        self.args.dropout_keep_prob,
-                        attention_function='dot_product'
-                    )
-                    self.token_encoder = residual_link(self.token_encoder, y, self.args.dropout_keep_prob)
+            self.token_att = self_transformer(self.token_encoder, self.token_encoder, self.mask, self.args.n_block,
+                                              self.args.n_emb, self.args.n_head, self.args.dropout_keep_prob, True,
+                                              self.is_train)
 
-    def _predict_causality(self):
-        with tf.variable_scope('predict_causality'):
-            self.token_pre = tf.reshape(self.token_encoder, [self.N, self.args.max_len * self.n_hidden])
-            self.cau_outputs = dense(self.token_pre, self.n_class, initializer=self.initializer)
-
-    def _extract_altlex(self):
-        with tf.variable_scope('extract_altlex'):
-            self.token_ext = tf.reshape(self.token_encoder, [-1, self.n_hidden])
-            self.alt_outputs = dense(self.token_ext, 3, initializer=self.initializer)
-            self.alt_outputs = tf.reshape(self.alt_outputs, tf.stack([-1, self.args.max_len, 3]))
+    def _predict_label(self):
+        with tf.variable_scope('predict_labels'):
+            self.token_att = tf.reshape(self.token_att, shape=[self.N, self.args.max_len * self.args.n_emb])
+            self.outputs = dense(self.token_att, self.n_class, initializer=self.initializer)
 
     def _compute_loss(self):
-        self.pred_cau = tf.argmax(self.cau_outputs, axis=1)
-        self.pred_alt = tf.argmax(self.alt_outputs, axis=2)
-        self.loss = self.args.alpha * tc.seq2seq.sequence_loss(logits=self.alt_outputs, targets=self.alt_labels,
-                                                               weights=self.mask)
+        self.pre_labels = tf.argmax(self.outputs, axis=1)
         if self.args.pos_weight > 0:
-            self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.cau_labels, 2),
-                                                                                 logits=self.cau_outputs,
-                                                                                 pos_weight=self.args.pos_weight))
+            self.loss = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=tf.one_hot(self.labels, 2),
+                                                                                logits=self.outputs,
+                                                                                pos_weight=self.args.pos_weight))
         else:
-            self.loss += tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.cau_labels,
-                                                                                       logits=self.cau_outputs))
+            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
+                                                                                      logits=self.outputs))
         # self.loss = self._focal_loss(tf.one_hot(self.labels, 2, axis=1), self.output)
         self.all_params = tf.trainable_variables()
         if self.args.weight_decay > 0:
