@@ -33,7 +33,7 @@ def parse_args():
                         help='specify gpu device')
 
     train_settings = parser.add_argument_group('train settings')
-    train_settings.add_argument('--num_steps', type=int, default=16000,
+    train_settings.add_argument('--num_steps', type=int, default=32000,
                                 help='num of step')
     train_settings.add_argument('--period', type=int, default=400,
                                 help='period to save batch loss')
@@ -49,13 +49,13 @@ def parse_args():
                                 help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--global_norm', type=int, default=36,
+    train_settings.add_argument('--global_norm', type=int, default=25,
                                 help='clip gradient norm')
     train_settings.add_argument('--train_batch', type=int, default=64,
                                 help='train batch size')
     train_settings.add_argument('--valid_batch', type=int, default=32,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=10,
+    train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
     train_settings.add_argument('--patience', type=int, default=2,
                                 help='num of epochs for train patients')
@@ -152,7 +152,7 @@ def train(args, file_paths, max_len):
     sess_config.gpu_options.allow_growth = True
 
     max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
-    f1_save, patience = 0, 0
+    epoch, f1_save, patience = 1, 0, 0
     lr = args.lr
     with tf.Session(config=sess_config) as sess:
         writer = tf.summary.FileWriter(args.summary_dir)
@@ -172,7 +172,7 @@ def train(args, file_paths, max_len):
                 writer.add_summary(loss_sum, step)
 
             if step % args.checkpoint == 0:
-                logger.info('Evaluating the model for epoch {}'.format(step // args.checkpoint))
+                logger.info('Evaluating the model for epoch {}'.format(epoch))
                 sess.run(tf.assign(model.is_train, tf.constant(False, dtype=tf.bool)))
                 train_metrics, summ = evaluate_batch(model, args.eval_num_batches, train_eval_file, sess, 'train',
                                                      handle, train_handle)
@@ -188,18 +188,20 @@ def train(args, file_paths, max_len):
                 for s in summ:
                     writer.add_summary(s, step)
                 writer.flush()
-                f1 = valid_metrics['f1']
-                if f1 > f1_save:
-                    f1_save = f1
-                    patience = 0
-                else:
-                    patience += 1
-                if patience >= args.patience:
-                    lr /= 2.0
-                    logger.info('Learning rate reduced to {}'.format(lr))
-                    f1_save = f1
-                    patience = 0
-                sess.run(tf.assign(model.lr, tf.constant(lr, dtype=tf.float32)))
+                # f1 = valid_metrics['f1']
+                # if f1 > f1_save:
+                #     f1_save = f1
+                #     patience = 0
+                # else:
+                #     patience += 1
+                # if patience >= args.patience:
+                #     lr /= 2.0
+                #     logger.info('Learning rate reduced to {}'.format(lr))
+                #     f1_save = f1
+                #     patience = 0
+                # sess.run(tf.assign(model.lr, tf.constant(lr, dtype=tf.float32)))
+                lr_decay = 0.9 ** max(epoch - 5, 0)
+                sess.run(tf.assign(model.lr, tf.constant(lr * lr_decay, dtype=tf.float32)))
                 max_acc = max(valid_metrics['acc'], max_acc)
                 max_p = max(valid_metrics['precision'], max_p)
                 max_r = max(valid_metrics['recall'], max_r)
