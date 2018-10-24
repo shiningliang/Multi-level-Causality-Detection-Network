@@ -156,7 +156,7 @@ class Multihead_Attention(nn.Module):
         # Normalize
         outputs = self.normalization(outputs)  # (N, T_q, C)
 
-        return outputs.transpose(2, 1)
+        return outputs
 
 
 class FeedForward(nn.Module):

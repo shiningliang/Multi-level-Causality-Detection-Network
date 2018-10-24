@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess import run_prepare
-from models.torch_Hierarchical import TCN
+from models.torch_Hierarchical import TCN, BiGRU
 from torch_util import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
@@ -39,13 +39,15 @@ def parse_args():
                                 help='Disable CUDA')
     train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
-    train_settings.add_argument('--clip', type=float, default=0.35,
+    train_settings.add_argument('--clip', type=float, default=-1,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0001,
+    train_settings.add_argument('--weight_decay', type=float, default=0.0002,
                                 help='weight decay')
-    train_settings.add_argument('--dropout', type=float, default=0.5,
+    train_settings.add_argument('--emb_dropout', type=float, default=0.65,
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_train', type=int, default=64,
+    train_settings.add_argument('--layer_dropout', type=float, default=0.65,
+                                help='dropout keep rate')
+    train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
@@ -57,31 +59,33 @@ def parse_args():
                                 help='num of epochs for train patients')
     train_settings.add_argument('--period', type=int, default=500,
                                 help='period to save batch loss')
+    train_settings.add_argument('--num_threads', type=int, default=8,
+                                help='Number of threads in input pipeline')
 
     model_settings = parser.add_argument_group('model settings')
     model_settings.add_argument('--max_len', type=int, default=200,
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--hidden_size', type=int, default=128,
+    model_settings.add_argument('--n_hidden', type=int, default=64,
                                 help='size of LSTM hidden units')
-    model_settings.add_argument('--layer_num', type=int, default=2,
+    model_settings.add_argument('--n_layer', type=int, default=2,
                                 help='num of layers')
-    model_settings.add_argument('--num_threads', type=int, default=8,
-                                help='Number of threads in input pipeline')
-    model_settings.add_argument('--capacity', type=int, default=20000,
-                                help='Batch size of data set shuffle')
     model_settings.add_argument('--is_fc', type=bool, default=False,
                                 help='whether to use focal loss')
     model_settings.add_argument('--is_atten', type=bool, default=False,
                                 help='whether to use self attention')
     model_settings.add_argument('--is_gated', type=bool, default=False,
                                 help='whether to use gated conv')
-    model_settings.add_argument('--n_head', type=int, default=2,
+    model_settings.add_argument('--n_block', type=int, default=2,
+                                help='attention block size (default: 2)')
+    model_settings.add_argument('--n_head', type=int, default=4,
                                 help='attention head size (default: 2)')
+    model_settings.add_argument('--is_ffn', type=bool, default=False,
+                                help='whether to use point-wise ffn')
     model_settings.add_argument('--n_kernel', type=int, default=3,
                                 help='kernel size (default: 3)')
-    model_settings.add_argument('--n_level', type=int, default=8,
+    model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
     model_settings.add_argument('--n_filter', type=int, default=256,
                                 help='number of hidden units per layer (default: 256)')
@@ -116,7 +120,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     model.train()
     train_loss = []
     n_batch_loss = 0
-    weight = torch.from_numpy(np.array([1, 1], dtype=np.float32)).to(args.device)
+    weight = torch.from_numpy(np.array([0.2, 0.8], dtype=np.float32)).to(args.device)
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
@@ -137,7 +141,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
         loss.backward()
         if args.clip > 0:
             # 梯度裁剪，输入是(NN参数，最大梯度范数，范数类型=2)，一般默认为L2范数
-            torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         optimizer.step()
         n_batch_loss += loss.item()
         bidx = batch_idx + 1
@@ -183,8 +187,12 @@ def train(args, file_paths):
     logger.info('Loading shape meta...')
     logger.info('Num train data {} Num valid data {}'.format(train_num, valid_num))
 
-    model = TCN(token_embeddings, args.max_len, args.n_class, n_channel=[args.n_filter] * args.n_level,
-                n_kernel=args.n_kernel, dropout=args.dropout, logger=logger).to(device=args.device)
+    dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    # model = TCN(token_embeddings, args.max_len, args.n_class, n_channel=[args.n_filter] * args.n_level,
+    #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
+    #     device=args.device)
+    model = BiGRU(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_block, args.n_head,
+                  dropout=dropout, logger=logger).to(device=args.device)
     logger.info('Initialize the model...')
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)

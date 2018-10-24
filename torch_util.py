@@ -89,12 +89,12 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, logger
         causality_labels += cau_labels.tolist()
 
     metrics['loss'] = np.mean(losses)
-    metrics['acc'] = accuracy_score(causality_preds, causality_labels)
-    metrics['precision'] = precision_score(causality_preds, causality_labels)
-    metrics['recall'] = recall_score(causality_preds, causality_labels)
-    metrics['f1'] = f1_score(causality_preds, causality_labels)
+    metrics['acc'] = accuracy_score(causality_labels, causality_preds)
+    metrics['precision'] = precision_score(causality_labels, causality_preds)
+    metrics['recall'] = recall_score(causality_labels, causality_preds)
+    metrics['f1'] = f1_score(causality_labels, causality_preds)
     logger.info('Full confusion matrix')
-    logger.info(confusion_matrix(causality_preds, causality_labels))
+    logger.info(confusion_matrix(causality_labels, causality_preds))
     return metrics
     # tn, fp, fn, tp = confusion_matrix(auc_ref, auc_pre).ravel()
     # loss_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/loss'.format(data_type), simple_value=metrics['loss']), ])
