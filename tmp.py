@@ -47,21 +47,22 @@ def process_train(path):
 
 def process_test(path):
     sentences, labels = [], []
+    seg_sentences = []
     i = 1
     with open(path, 'r', encoding='utf8') as fh:
         for line in fh:
             line = line.strip().split('\t')
             num = int(line[-1])
             labels.append(0 if num == 0 else 1)
-            del line[0]
+            del line[-1]
             if len(line) < 3:
                 print(i)
-            tmp = word_tokenize(SPACE.join(line).strip())
-            sentences.append(tmp)
+            sentences.append(word_tokenize(SPACE.join(line).strip()))
+            seg_sentences.append([word_tokenize(seg) for seg in line])
             i += 1
     fh.close()
 
-    return sentences, labels
+    return seg_sentences, labels
 
 
 def seg_length(sentences):
@@ -69,6 +70,16 @@ def seg_length(sentences):
     for sen in sentences:
         seg_len.append((len(sen[0]), len(sen[1]), len(sen[2])))
     return seg_len
+
+
+def stat_length(sentences):
+    max_pre, max_alt, max_cur = 0, 0, 0
+    for sen in sentences:
+        max_pre = max(max_pre, len(sen[0]))
+        max_alt = max(max_alt, len(sen[1]))
+        max_cur = max(max_cur, len(sen[2]))
+
+    return max_pre, max_alt, max_cur
 
 
 def stat_altlex(eng_sentences, sim_sentences, labels):
@@ -118,21 +129,25 @@ def gen_annotation(eng_length, sim_length, max_length, path, labels):
 
 
 # engs, sims, labels = process_train(train_path)
-# sens, labels = process_test(test_path)
-# english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
-#                         '"', '``', '-', '\'\'']
+sens, labels = process_test(test_path)
+english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
+                        '"', '``', '-', '\'\'']
 # seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in engs]
 # seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim in sims]
+seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sen] for sen in sens]
 
 # stat_altlex(seg_eng_filtered, seg_sim_filtered, labels)
 # eng_len = seg_length(seg_eng_filtered)
 # sim_len = seg_length(seg_sim_filtered)
+# print(stat_length(seg_eng_filtered))
+# print(stat_length(seg_sim_filtered))
+print(stat_length(seg_test_filtered))
 # gen_annotation(eng_len, sim_len, 200, data_path, labels)
 
-anno_path = os.path.join(data_path, 'data/processed_data/test_annotations.txt')
-with open(anno_path, 'r', encoding='utf8') as fh:
-    line = fh.readline().strip().split(' ')
-    print(line)
-    print(list(map(int, line)))
+# anno_path = os.path.join(data_path, 'data/processed_data/test_annotations.txt')
+# with open(anno_path, 'r', encoding='utf8') as fh:
+#     line = fh.readline().strip().split(' ')
+#     print(line)
+#     print(list(map(int, line)))
 
 print('hello world')

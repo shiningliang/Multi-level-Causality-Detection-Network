@@ -7,7 +7,7 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from torch_preprocess import run_prepare
+from torch_preprocess_1 import run_prepare
 from models.torch_Hierarchical import TCN, BiGRU
 from torch_util import get_batch, evaluate_batch, FocalLoss
 
@@ -43,11 +43,11 @@ def parse_args():
                                 help='gradient clip, -1 means no clip (default: 0.35)')
     train_settings.add_argument('--weight_decay', type=float, default=0.0002,
                                 help='weight decay')
-    train_settings.add_argument('--emb_dropout', type=float, default=0.65,
+    train_settings.add_argument('--emb_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--layer_dropout', type=float, default=0.65,
+    train_settings.add_argument('--layer_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_train', type=int, default=32,
+    train_settings.add_argument('--batch_train', type=int, default=128,
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
@@ -63,7 +63,7 @@ def parse_args():
                                 help='Number of threads in input pipeline')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--max_len', type=int, default=200,
+    model_settings.add_argument('--max_len', type=dict, default={'full': 200, 'pre': 100, 'alt': 10, 'cur': 200},
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -93,7 +93,7 @@ def parse_args():
                                 help='class size (default: 2)')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='torch',
+    path_settings.add_argument('--task', default='torch_RN',
                                help='the task name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
@@ -228,6 +228,7 @@ def train(args, file_paths):
     logger.info('Max Recall - {}'.format(max_r))
     logger.info('Max F1 - {}'.format(max_f))
     logger.info('Max Epoch - {}'.format(max_epoch))
+    logger.info('Max Sum - {}'.format(max_sum))
 
 
 def run():
