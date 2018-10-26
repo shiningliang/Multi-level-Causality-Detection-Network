@@ -129,19 +129,19 @@ def gen_annotation(eng_length, sim_length, max_length, path, labels):
 
 
 # engs, sims, labels = process_train(train_path)
-sens, labels = process_test(test_path)
-english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
-                        '"', '``', '-', '\'\'']
+# sens, labels = process_test(test_path)
+# english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
+#                         '"', '``', '-', '\'\'']
 # seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in engs]
 # seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim in sims]
-seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sen] for sen in sens]
+# seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sen] for sen in sens]
 
 # stat_altlex(seg_eng_filtered, seg_sim_filtered, labels)
 # eng_len = seg_length(seg_eng_filtered)
 # sim_len = seg_length(seg_sim_filtered)
 # print(stat_length(seg_eng_filtered))
 # print(stat_length(seg_sim_filtered))
-print(stat_length(seg_test_filtered))
+# print(stat_length(seg_test_filtered))
 # gen_annotation(eng_len, sim_len, 200, data_path, labels)
 
 # anno_path = os.path.join(data_path, 'data/processed_data/test_annotations.txt')
@@ -149,5 +149,36 @@ print(stat_length(seg_test_filtered))
 #     line = fh.readline().strip().split(' ')
 #     print(line)
 #     print(list(map(int, line)))
+
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+from torch.nn import utils as nn_utils
+
+batch_size = 2
+max_length = 3
+hidden_size = 2
+n_layers = 1
+
+tensor_in = torch.LongTensor([[1, 2, 3], [1, 0, 0]])
+tensor_in = Variable(tensor_in)  # [batch, seq, feature], [2, 3, 1]
+seq_lengths = [3, 1]  # list of integers holding information about the batch size at each sequence step
+
+# pack it
+# pack = nn_utils.rnn.pack_padded_sequence(tensor_in, seq_lengths, batch_first=True)
+
+# initialize
+emb = nn.Embedding(5, 5, padding_idx=0)
+rnn = nn.RNN(5, hidden_size, n_layers, batch_first=True)
+h0 = Variable(torch.randn(n_layers, batch_size, hidden_size))
+
+# forward
+in_emb = emb(tensor_in)
+out, _ = rnn(in_emb, h0)
+
+# unpack
+# unpacked = nn_utils.rnn.pad_packed_sequence(out)
+# print('111', unpacked)
+print(out)
 
 print('hello world')

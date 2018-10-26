@@ -5,7 +5,6 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 import ujson as json
-import tensorflow as tf
 import torch
 import nltk
 from nltk.tokenize import word_tokenize

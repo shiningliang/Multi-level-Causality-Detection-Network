@@ -53,8 +53,8 @@ class BiGRU(nn.Module):
         self.embedding.weight.data.copy_(torch.from_numpy(token_embeddings))
         self.embedding.weight.requires_grad = False
         self.emb_dropout = nn.Dropout(dropout['emb'])
-        self.bi_gru = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
-        # self.bi_gru = SRU(n_emb, n_hidden, n_layer, dropout['layer'], bidirectional=True)
+        # self.bi_gru = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
+        self.bi_gru = SRU(n_emb, n_hidden, n_layer, dropout['layer'], bidirectional=True)
         for i in range(self.n_block):
             self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.n_hidden, n_head, dropout['layer']))
             # self.__setattr__('feed_forward_%d' % i, FeedForward(self.n_hidden, [4 * self.n_hidden, self.n_hidden]))

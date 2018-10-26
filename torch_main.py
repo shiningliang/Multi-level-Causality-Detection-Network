@@ -39,7 +39,7 @@ def parse_args():
                                 help='Disable CUDA')
     train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
-    train_settings.add_argument('--clip', type=float, default=-1,
+    train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
     train_settings.add_argument('--weight_decay', type=float, default=0.0002,
                                 help='weight decay')
@@ -47,7 +47,7 @@ def parse_args():
                                 help='dropout keep rate')
     train_settings.add_argument('--layer_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_train', type=int, default=128,
+    train_settings.add_argument('--batch_train', type=int, default=64,
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
@@ -188,11 +188,11 @@ def train(args, file_paths):
     logger.info('Num train data {} Num valid data {}'.format(train_num, valid_num))
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
-    # model = TCN(token_embeddings, args.max_len, args.n_class, n_channel=[args.n_filter] * args.n_level,
+    # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
-    model = BiGRU(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_block, args.n_head,
-                  dropout=dropout, logger=logger).to(device=args.device)
+    model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
+                  args.n_head, dropout=dropout, logger=logger).to(device=args.device)
     logger.info('Initialize the model...')
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
