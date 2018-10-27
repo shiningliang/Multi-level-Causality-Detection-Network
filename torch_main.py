@@ -8,8 +8,9 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import TCN, BiGRU
-from torch_util import get_batch, evaluate_batch, FocalLoss
+from models.torch_Hierarchical import TCN, BiGRU, Hierarchical
+from models.torch_RelationNetwork import CRN
+from torch_util_1 import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -37,11 +38,11 @@ def parse_args():
     train_settings = parser.add_argument_group('train settings')
     train_settings.add_argument('--disable_cuda', action='store_true',
                                 help='Disable CUDA')
-    train_settings.add_argument('--lr', type=float, default=0.001,
+    train_settings.add_argument('--lr', type=float, default=0.0001,
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0002,
+    train_settings.add_argument('--weight_decay', type=float, default=0.001,
                                 help='weight decay')
     train_settings.add_argument('--emb_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
@@ -85,9 +86,11 @@ def parse_args():
                                 help='whether to use point-wise ffn')
     model_settings.add_argument('--n_kernel', type=int, default=3,
                                 help='kernel size (default: 3)')
+    model_settings.add_argument('--n_kernels', type=int, default=[2, 3, 4],
+                                help='kernels size (default: 2, 3, 4)')
     model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
-    model_settings.add_argument('--n_filter', type=int, default=256,
+    model_settings.add_argument('--n_filter', type=int, default=50,
                                 help='number of hidden units per layer (default: 256)')
     model_settings.add_argument('--n_class', type=int, default=2,
                                 help='class size (default: 2)')
@@ -124,10 +127,12 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
-        sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
+        # sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx],
+                                                                                     args.device)
 
         optimizer.zero_grad()
-        outputs = model(sentences)
+        outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         # loss = compute_loss(logits=outputs, target=labels, length=seq_lens)
         if args.is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
@@ -191,8 +196,12 @@ def train(args, file_paths):
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
-    model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
-                  args.n_head, dropout=dropout, logger=logger).to(device=args.device)
+    # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
+    #               args.n_head, dropout=dropout, logger=logger).to(device=args.device)
+    # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
+    #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
+    model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
+                         args.n_filter, args.n_block, args.n_head, args.is_ffn, dropout, logger).to(device=args.device)
     logger.info('Initialize the model...')
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)

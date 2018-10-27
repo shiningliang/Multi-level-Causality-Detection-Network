@@ -1,5 +1,6 @@
 import os
 from nltk.tokenize import word_tokenize
+from sru import SRU
 
 SPACE = ' '
 data_path = os.getcwd()
@@ -155,30 +156,40 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.nn import utils as nn_utils
 
-batch_size = 2
-max_length = 3
-hidden_size = 2
-n_layers = 1
+batch_size = 3
+max_length = 4
+hidden_size = 4
+n_layers = 2
 
-tensor_in = torch.LongTensor([[1, 2, 3], [1, 0, 0]])
+tensor_in = torch.LongTensor([[1, 2, 3, 1], [1, 0, 0, 0], [4, 2, 0, 0]])
 tensor_in = Variable(tensor_in)  # [batch, seq, feature], [2, 3, 1]
-seq_lengths = [3, 1]  # list of integers holding information about the batch size at each sequence step
+seq_lengths = torch.IntTensor([4, 1, 2])  # list of integers holding information about the batch size at each sequence step
 
 # pack it
 # pack = nn_utils.rnn.pack_padded_sequence(tensor_in, seq_lengths, batch_first=True)
 
 # initialize
 emb = nn.Embedding(5, 5, padding_idx=0)
-rnn = nn.RNN(5, hidden_size, n_layers, batch_first=True)
-h0 = Variable(torch.randn(n_layers, batch_size, hidden_size))
+# rnn = nn.RNN(5, hidden_size, n_layers, batch_first=True, bidirectional=True)
+rnn = SRU(5, hidden_size, n_layers, bidirectional=True)
+h0 = Variable(torch.randn(2*n_layers, batch_size, hidden_size))
 
 # forward
+sorted_seq_lengths, indices = torch.sort(seq_lengths, dim=0, descending=True)
+_, desorted_indices = torch.sort(indices, descending=False)
+tensor_in = tensor_in[indices]
+# tensor_in = tensor_in.index_select(0, Variable(idx_sort))
+# seq_lengths = list(seq_lengths[idx_sort])
 in_emb = emb(tensor_in)
-out, _ = rnn(in_emb, h0)
-
+in_emb = nn_utils.rnn.pack_padded_sequence(in_emb, sorted_seq_lengths, batch_first=True)
+out, state = rnn(in_emb, h0)
+state = state.view(n_layers, 2, batch_size, hidden_size)
+forward_state, backward_state = state[-1][0], state[-1][1]
+last_state = torch.cat([forward_state, backward_state], dim=1)
 # unpack
-# unpacked = nn_utils.rnn.pad_packed_sequence(out)
-# print('111', unpacked)
-print(out)
+unpacked, _ = nn_utils.rnn.pad_packed_sequence(out, batch_first=True)
+unpacked = unpacked[desorted_indices]
+print('unpacked', unpacked)
+# print(out)
 
 print('hello world')
