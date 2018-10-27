@@ -96,7 +96,8 @@ class Hierarchical(nn.Module):
         self.emb_dropout = nn.Dropout(dropout['emb'])
 
         # self.sentence_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
-        self.sentence_encoder = SRU(n_emb, n_hidden, n_layer, dropout['layer'], bidirectional=True)
+        self.sentence_encoder = SRU(n_emb, n_hidden, n_layer, dropout['layer'], weight_norm=True, layer_norm=True,
+                                    bidirectional=True)
         for i in range(self.n_block):
             self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.att_hidden, n_head, dropout['layer']))
             if self.is_ffn:
