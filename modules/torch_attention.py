@@ -22,7 +22,41 @@ class layer_normalization(nn.Module):
         return self.gamma * (x - mean) / (std + self.epsilon) + self.beta
 
 
-class positional_encoding(nn.Module):
+class WordEmbedding(nn.Module):
+    def __init__(self, vocab_size, num_units, zeros_pad=True, scale=True):
+        '''Embeds a given Variable.
+        Args:
+          vocab_size: An int. Vocabulary size.
+          num_units: An int. Number of embedding hidden units.
+          zero_pad: A boolean. If True, all the values of the fist row (id 0)
+            should be constant zeros.
+          scale: A boolean. If True. the outputs is multiplied by sqrt num_units.
+        '''
+        super(WordEmbedding, self).__init__()
+        self.vocab_size = vocab_size
+        self.num_units = num_units
+        self.zeros_pad = zeros_pad
+        self.scale = scale
+        self.lookup_table = Parameter(torch.Tensor(vocab_size, num_units))
+        nn.init.xavier_normal(self.lookup_table.data)
+        if self.zeros_pad:
+            self.lookup_table.data[0, :].fill_(0)
+
+    def forward(self, inputs):
+        if self.zeros_pad:
+            self.padding_idx = 0
+        else:
+            self.padding_idx = -1
+        outputs = self._backend.Embedding.apply(
+            inputs, self.lookup_table, self.padding_idx, None, 2, False, False)  # copied from torch.nn.modules.sparse.py
+
+        if self.scale:
+            outputs = outputs * (self.num_units ** 0.5)
+
+        return outputs
+
+
+class PositionEmbedding(nn.Module):
     def __init__(self, num_units, zeros_pad=True, scale=True):
         '''Sinusoidal Positional_Encoding.
         Args:
@@ -30,7 +64,7 @@ class positional_encoding(nn.Module):
           zero_pad: Boolean. If True, all the values of the first row (id = 0) should be constant zero
           scale: Boolean. If True, the output will be multiplied by sqrt num_units(check details from paper)
         '''
-        super(positional_encoding, self).__init__()
+        super(PositionEmbedding, self).__init__()
         self.num_units = num_units
         self.zeros_pad = zeros_pad
         self.scale = scale

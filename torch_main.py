@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import TCN, BiGRU, Hierarchical
+from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2
 from models.torch_RelationNetwork import CRN
 from torch_util_1 import get_batch, evaluate_batch, FocalLoss
 
@@ -40,7 +40,7 @@ def parse_args():
                                 help='Disable CUDA')
     train_settings.add_argument('--lr', type=float, default=0.0001,
                                 help='learning rate')
-    train_settings.add_argument('--clip', type=float, default=0.5,
+    train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
     train_settings.add_argument('--weight_decay', type=float, default=0.0003,
                                 help='weight decay')
@@ -82,7 +82,9 @@ def parse_args():
                                 help='attention block size (default: 2)')
     model_settings.add_argument('--n_head', type=int, default=4,
                                 help='attention head size (default: 2)')
-    model_settings.add_argument('--is_ffn', type=bool, default=False,
+    model_settings.add_argument('--is_sinusoid', type=bool, default=True,
+                                help='whether to use sinusoid position embedding')
+    model_settings.add_argument('--is_ffn', type=bool, default=True,
                                 help='whether to use point-wise ffn')
     model_settings.add_argument('--n_kernel', type=int, default=3,
                                 help='kernel size (default: 3)')
@@ -200,8 +202,14 @@ def train(args, file_paths):
     #               args.n_head, dropout=dropout, logger=logger).to(device=args.device)
     # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
     #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
-    model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-                         args.n_filter, args.n_block, args.n_head, args.is_ffn, dropout, logger).to(device=args.device)
+    # model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
+    #                      args.n_filter, args.n_block, args.n_head, args.is_ffn, dropout, logger).to(device=args.device)
+    # model = Hierarchical_1(token_embeddings, args.max_len, args.n_class, args.n_level, args.n_hidden, args.n_layer,
+    #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_ffn,
+    #                        dropout, logger).to(device=args.device)
+    model = Hierarchical_2(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+                           args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+                           dropout, logger).to(device=args.device)
     logger.info('Initialize the model...')
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
