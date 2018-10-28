@@ -95,9 +95,10 @@ class Hierarchical(nn.Module):
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
         self.emb_dropout = nn.Dropout(dropout['emb'])
 
-        # self.sentence_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
-        self.sentence_encoder = SRU(n_emb, n_hidden, n_layer, dropout['layer'], weight_norm=True, layer_norm=True,
-                                    bidirectional=True)
+        self.word_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
+        self.seg_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], batch_first=True, bidirectional=True)
+        # self.sentence_encoder = SRU(n_emb, n_hidden, n_layer, dropout['layer'], weight_norm=True, layer_norm=True,
+        #                             bidirectional=True)
         for i in range(self.n_block):
             self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.att_hidden, n_head, dropout['layer']))
             if self.is_ffn:
@@ -144,7 +145,7 @@ class Hierarchical(nn.Module):
         x_cur_word_emb = self.emb_dropout(x_cur_word_emb)
 
         # x_word_emb = nn_utils.rnn.pack_padded_sequence(x_word_emb, sorted_seq_lens, batch_first=True)
-        output, state = self.sentence_encoder(x_word_emb.permute(1, 0, 2))
+        output, _ = self.word_encoder(x_word_emb.permute(1, 0, 2))
 
         y_encoder = output.permute(1, 0, 2)
         for i in range(self.n_block):
@@ -153,9 +154,14 @@ class Hierarchical(nn.Module):
         y_word = torch.reshape(y_encoder, [-1, self.max_len * self.att_hidden])
         y_word = self.word_fc(y_word)
 
+        x_word_emb = nn_utils.rnn.pack_padded_sequence(x_word_emb, sorted_seq_lens, batch_first=True)
+        output, state = self.seg_encoder(x_word_emb)
         state = state.view(self.n_layer, 2, batch_size, self.gru_hidden)
         forward_state, backward_state = state[-1][0], state[-1][1]
         y_state = torch.cat([forward_state, backward_state], dim=1)
+        # state = state.view(self.n_layer, 2, batch_size, self.gru_hidden)
+        # forward_state, backward_state = state[-1][0], state[-1][1]
+        # y_state = torch.cat([forward_state, backward_state], dim=1)
         y_pre = self.pre_encoder(x_pre_word_emb)
         y_alt = self.alt_encoder(x_alt_word_emb)
         y_cur = self.cur_encoder(x_cur_word_emb)

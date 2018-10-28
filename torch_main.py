@@ -40,7 +40,7 @@ def parse_args():
                                 help='Disable CUDA')
     train_settings.add_argument('--lr', type=float, default=0.0001,
                                 help='learning rate')
-    train_settings.add_argument('--clip', type=float, default=0.35,
+    train_settings.add_argument('--clip', type=float, default=0.5,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
     train_settings.add_argument('--weight_decay', type=float, default=0.0003,
                                 help='weight decay')
