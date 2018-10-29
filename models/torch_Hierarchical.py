@@ -44,38 +44,67 @@ class TCN(nn.Module):
 
 
 class BiGRU(nn.Module):
-    def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_block, n_head, dropout, logger):
+    def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_block, n_head, is_ffn, is_sinusoid,
+                 dropout, logger):
         super(BiGRU, self).__init__()
-        self.n_hidden = 2 * n_hidden
-        self.max_len = max_len
-        n_dict, n_emb = token_embeddings.shape
-        self.n_block = n_block
         start_t = time()
-        self.embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
-        self.embedding.weight.data.copy_(torch.from_numpy(token_embeddings))
-        self.embedding.weight.requires_grad = False
+        n_dict, n_emb = token_embeddings.shape
+        self.att_hidden = n_emb
+        self.max_len = max_len
+        self.n_block = n_block
+        self.is_ffn = is_ffn
+        self.is_sinusoid = is_sinusoid
+        self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
+        if is_sinusoid:
+            self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)
+        else:
+            self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
         self.emb_dropout = nn.Dropout(dropout['emb'])
-        # self.bi_gru = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
-        self.bi_gru = SRU(n_emb, n_hidden, n_layer, dropout['layer'], bidirectional=True)
+
         for i in range(self.n_block):
-            self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.n_hidden, n_head, dropout['layer']))
-            # self.__setattr__('feed_forward_%d' % i, FeedForward(self.n_hidden, [4 * self.n_hidden, self.n_hidden]))
-        self.linear = nn.Linear(self.max_len * self.n_hidden, output_size)
-        self.init_weights()
+            self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.att_hidden, n_head, dropout['layer']))
+            if self.is_ffn:
+                self.__setattr__('feed_forward_%d' % i, FeedForward(self.att_hidden,
+                                                                    [4 * self.att_hidden, self.att_hidden]))
+        self.word_fc = nn.Linear(self.max_len * self.att_hidden, self.att_hidden)
+        self.out_fc = nn.Linear(self.att_hidden, output_size)
+
+        # self.embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
+        # self.embedding.weight.data.copy_(torch.from_numpy(token_embeddings))
+        # self.embedding.weight.requires_grad = False
+        # self.emb_dropout = nn.Dropout(dropout['emb'])
+        # # self.bi_gru = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], bidirectional=True)
+        # self.bi_gru = SRU(n_emb, n_hidden, n_layer, dropout['layer'], bidirectional=True)
+        # for i in range(self.n_block):
+        #     self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.n_hidden, n_head, dropout['layer']))
+        #       self.__setattr__('feed_forward_%d' % i, FeedForward(self.n_hidden, [4 * self.n_hidden, self.n_hidden]))
+        # self.linear = nn.Linear(self.max_len * self.n_hidden, output_size)
+        # self.init_weights()
         logger.info('Time to build graph: {} s'.format(time() - start_t))
 
     def init_weights(self):
-        self.linear.weight.data.normal_(0, 0.01)
+        self.word_fc.weight.data.normal_(0, 0.01)
 
     def forward(self, x):
-        x_emb = self.embedding(x)
-        x_emb = self.emb_dropout(x_emb)
-        y = self.bi_gru(x_emb.permute(1, 0, 2))[0].permute(1, 0, 2)
+        x_word_emb = self.word_embedding(x)
+        x_word_emb = self.emb_dropout(x_word_emb)
+        # y = self.bi_gru(x_emb.permute(1, 0, 2))[0].permute(1, 0, 2)
+        # for i in range(self.n_block):
+        #     y = self.__getattr__('self_attention_%d' % i)(y)
+        #     # y = self.__getattr__('feed_forward_%d' % i)(y)
+        # y = torch.reshape(y, [-1, self.max_len * self.n_hidden])
+        if self.is_sinusoid:
+            x_word_emb += self.position_embedding(x)
+        else:
+            x_word_emb += self.position_embedding(torch.Variable(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda()))
+        y_encoder = self.emb_dropout(x_word_emb)
         for i in range(self.n_block):
-            y = self.__getattr__('self_attention_%d' % i)(y)
-            # y = self.__getattr__('feed_forward_%d' % i)(y)
-        y = torch.reshape(y, [-1, self.max_len * self.n_hidden])
-        return self.linear(y)
+            y_encoder = self.__getattr__('self_attention_%d' % i)(y_encoder)
+            if self.is_ffn:
+                y_encoder = self.__getattr__('feed_forward_%d' % i)(y_encoder)
+        y_word = torch.reshape(y_encoder, [-1, self.max_len * self.att_hidden])
+        y_word = self.word_fc(y_word)
+        return self.out_fc(y_word)
 
 
 class Hierarchical(nn.Module):

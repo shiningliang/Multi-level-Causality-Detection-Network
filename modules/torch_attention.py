@@ -47,8 +47,9 @@ class WordEmbedding(nn.Module):
             self.padding_idx = 0
         else:
             self.padding_idx = -1
-        outputs = self._backend.Embedding.apply(
-            inputs, self.lookup_table, self.padding_idx, None, 2, False, False)  # copied from torch.nn.modules.sparse.py
+        outputs = F.embedding(inputs, self.lookup_table, self.padding_idx, None, 2, False, False)
+        # outputs = self._backend.Embedding.apply(
+        #     inputs, self.lookup_table, self.padding_idx, None, 2, False, False)  # copied from torch.nn.modules.sparse.py
 
         if self.scale:
             outputs = outputs * (self.num_units ** 0.5)
@@ -87,19 +88,18 @@ class PositionEmbedding(nn.Module):
         lookup_table = Variable(position_enc)
 
         if self.zeros_pad:
-            lookup_table = torch.cat((Variable(torch.zeros(1, self.num_units)),
-                                      lookup_table[1:, :]), 0)
+            lookup_table = torch.cat((Variable(torch.zeros(1, self.num_units)), lookup_table[1:, :]), 0)
             padding_idx = 0
         else:
             padding_idx = -1
-
-        outputs = self._backend.Embedding.apply(
-            position_ind, lookup_table, padding_idx, None, 2, False, False)  # copied from torch.nn.modules.sparse.py
+        outputs = F.embedding(position_ind, lookup_table, padding_idx, None, 2, False, False)
+        # outputs = self._backend.Embedding.apply(
+        #     position_ind, lookup_table, padding_idx, None, 2, False, False)  # copied from torch.nn.modules.sparse.py
 
         if self.scale:
             outputs = outputs * self.num_units ** 0.5
 
-        return outputs
+        return outputs.cuda()
 
 
 class Multihead_Attention(nn.Module):

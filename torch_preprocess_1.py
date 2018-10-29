@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import ujson as json
 import nltk
 from nltk.tokenize import word_tokenize
+import spacy
 from time import time
 
 np.random.seed(int(time()))
@@ -69,22 +70,31 @@ def seg_length(sentences):
     return seg_len
 
 
-def preprocess_train(file_path, file_name, data_type, is_build=False):
+def preprocess_train(file_path, file_name, data_type, is_build=False, tokenizer=None):
     print("Generating {} examples...".format(data_type))
     examples = []
     engs, sims = [], []
     seg_engs, seg_sims, labels = [], [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='utf8') as fh:
-        for line in fh:
-            line = line.strip().split('\t')
-            labels.append(int(line[0]))
-            del line[0]
-            engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
-            sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
-            seg_engs.append([word_tokenize(seg) for seg in line[:3]])
-            seg_sims.append([word_tokenize(seg) for seg in line[3:]])
-    fh.close()
+    lines = open(data_path, 'r', encoding='utf8').readlines()
+    for line in lines:
+        line = line.strip().split('\t')
+        labels.append(int(line[0]))
+        del line[0]
+        engs.append(list(tokenizer(SPACE.join(line[:3]).strip())))
+        sims.append(list(tokenizer(SPACE.join(line[3:]).strip())))
+        seg_engs.append([list(tokenizer(seg)) for seg in line[:3]])
+        seg_sims.append([list(tokenizer(seg)) for seg in line[3:]])
+    # with open(data_path, 'r', encoding='utf8') as fh:
+    #     for line in fh:
+    #         line = line.strip().split('\t')
+    #         labels.append(int(line[0]))
+    #         del line[0]
+    #         engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
+    #         sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
+    #         seg_engs.append([word_tokenize(seg) for seg in line[:3]])
+    #         seg_sims.append([word_tokenize(seg) for seg in line[3:]])
+    # fh.close()
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
@@ -123,20 +133,28 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
     return examples, sentences, (seg_eng_filtered, seg_sim_filtered), labels
 
 
-def preprocess_test(file_path, file_name, data_type, is_build=False):
+def preprocess_test(file_path, file_name, data_type, is_build=False, tokenizer=None):
     print("Generating {} examples...".format(data_type))
     examples = []
     sentences, segments, labels = [], [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='ISO-8859-1') as fh:
-        for line in fh:
-            line = line.strip().split('\t')
-            num = int(line[-1])
-            del line[-1]
-            labels.append(0 if num == 0 else 1)
-            sentences.append(word_tokenize(SPACE.join(line).strip()))
-            segments.append([word_tokenize(seg) for seg in line])
-    fh.close()
+    lines = open(data_path, 'r', encoding='ISO-8859-1').readlines()
+    for line in lines:
+        line = line.strip().split('\t')
+        num = int(line[-1])
+        del line[-1]
+        labels.append(0 if num == 0 else 1)
+        sentences.append(list(tokenizer(SPACE.join(line).strip())))
+        segments.append([list(tokenizer(seg)) for seg in line])
+    # with open(data_path, 'r', encoding='ISO-8859-1') as fh:
+    #     for line in fh:
+    #         line = line.strip().split('\t')
+    #         num = int(line[-1])
+    #         del line[-1]
+    #         labels.append(0 if num == 0 else 1)
+    #         sentences.append(word_tokenize(SPACE.join(line).strip()))
+    #         segments.append([word_tokenize(seg) for seg in line])
+    # fh.close()
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
@@ -221,7 +239,6 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     embedding_mat = np.zeros([len(token2id), vec_size])
     for token in filtered_tokens:
         embedding_mat[token2id[token]] = trained_embeddings[token]
-    token_tail = len(token2id)
     for token in combined_tokens:
         tokens = token.split('-')
         token_vec = np.zeros([vec_size])
@@ -232,9 +249,8 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
                 in_emb += 1
         if in_emb == 0:
             continue
-        token2id[token] = token_tail
+        token2id[token] = len(token2id)
         embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
-        token_tail += 1
     embedding_mat[1] = np.random.uniform(-0.25, 0.25)
     return embedding_mat, token2id
 
@@ -330,12 +346,14 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
 
 
 def run_prepare(config, flags):
+    tokenizer = spacy.load('en_core_web_lg')
     train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
-                                                                             'train', config.build)
+                                                                             'train', config.build, tokenizer)
     # valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
     #                                                                         'valid')
     test_examples, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
-                                                                        'test', config.build)
+                                                                        'test', config.build, tokenizer)
+    del tokenizer
     if config.build:
         types = ['train', 'test']
         labels = [train_labels, test_labels]
