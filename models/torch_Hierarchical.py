@@ -387,7 +387,7 @@ class Hierarchical_2(nn.Module):
         if self.sinusoid:
             x_word_emb += self.position_embedding(x)
         else:
-            x_word_emb += self.position_embedding(torch.Variable(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda()))
+            x_word_emb += self.position_embedding(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda())
         y_encoder = self.emb_dropout(x_word_emb)
         for i in range(self.n_block):
             y_encoder = self.__getattr__('self_attention_%d' % i)(y_encoder)

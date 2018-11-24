@@ -10,7 +10,9 @@ import torch.optim as optim
 from torch_preprocess_1 import run_prepare
 from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2
 from models.torch_RelationNetwork import CRN
-from torch_util import get_batch, evaluate_batch, FocalLoss
+from models.torch_TextCNN import TextCNN
+from models.torch_TextRNN import TextRNN
+from torch_util_1 import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -38,7 +40,7 @@ def parse_args():
     train_settings = parser.add_argument_group('train settings')
     train_settings.add_argument('--disable_cuda', action='store_true',
                                 help='Disable CUDA')
-    train_settings.add_argument('--lr', type=float, default=0.001,
+    train_settings.add_argument('--lr', type=float, default=0.0001,
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
@@ -48,7 +50,7 @@ def parse_args():
                                 help='dropout keep rate')
     train_settings.add_argument('--layer_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_train', type=int, default=64,
+    train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
@@ -58,7 +60,7 @@ def parse_args():
                                 help='optimizer type')
     train_settings.add_argument('--patience', type=int, default=2,
                                 help='num of epochs for train patients')
-    train_settings.add_argument('--period', type=int, default=500,
+    train_settings.add_argument('--period', type=int, default=1000,
                                 help='period to save batch loss')
     train_settings.add_argument('--num_threads', type=int, default=8,
                                 help='Number of threads in input pipeline')
@@ -82,6 +84,8 @@ def parse_args():
                                 help='attention block size (default: 2)')
     model_settings.add_argument('--n_head', type=int, default=4,
                                 help='attention head size (default: 2)')
+    model_settings.add_argument('--is_pos', type=bool, default=False,
+                                help='whether to use position embedding')
     model_settings.add_argument('--is_sinusoid', type=bool, default=True,
                                 help='whether to use sinusoid position embedding')
     model_settings.add_argument('--is_ffn', type=bool, default=True,
@@ -92,15 +96,17 @@ def parse_args():
                                 help='kernels size (default: 2, 3, 4)')
     model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
-    model_settings.add_argument('--n_filter', type=int, default=50,
+    model_settings.add_argument('--n_filter', type=int, default=100,
                                 help='number of hidden units per layer (default: 256)')
     model_settings.add_argument('--n_class', type=int, default=2,
                                 help='class size (default: 2)')
+    model_settings.add_argument('--kmax_pooling', type=int, default=2,
+                                help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='torch',
+    path_settings.add_argument('--task', default='torch_full',
                                help='the task name')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
@@ -129,13 +135,13 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
-        sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
-        # tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx],
-        #                                                                              args.device)
+        # sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx],
+                                                                                     args.device)
 
         optimizer.zero_grad()
-        # outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
-        outputs = model(sentences)
+        outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
+        # outputs = model(sentences)
         # loss = compute_loss(logits=outputs, target=labels, length=seq_lens)
         if args.is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
@@ -200,18 +206,23 @@ def train(args, file_paths):
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
-    model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
-                  args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
+    # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
+    #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
     # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
     #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
     # model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-    #                      args.n_filter, args.n_block, args.n_head, args.is_ffn, dropout, logger).to(device=args.device)
+    #                      args.n_filter, args.n_block, args.n_head, args.is_ffn,
+    #                      dropout, logger).to(device=args.device)
     # model = Hierarchical_1(token_embeddings, args.max_len, args.n_class, args.n_level, args.n_hidden, args.n_layer,
     #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_ffn,
     #                        dropout, logger).to(device=args.device)
     # model = Hierarchical_2(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
     #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #                        dropout, logger).to(device=args.device)
+    # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
+    #                 args.is_sinusoid, dropout, logger).to(device=args.device)
+    model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
+                    args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -303,7 +314,7 @@ def run():
             self.valid_annotation = os.path.join(args.processed_dir, 'valid_annotations.txt')
             self.test_annotation = os.path.join(args.processed_dir, 'test_annotations.txt')
 
-            self.corpus_file = os.path.join(args.processed_dir, 'train_corpus.txt')
+            self.corpus_file = os.path.join(args.processed_dir, 'corpus.txt')
             self.w2v_file = './data/processed_data/wiki_en_model.pkl'
             self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.pkl')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')

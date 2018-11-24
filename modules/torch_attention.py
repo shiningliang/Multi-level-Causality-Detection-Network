@@ -37,8 +37,8 @@ class WordEmbedding(nn.Module):
         self.num_units = num_units
         self.zeros_pad = zeros_pad
         self.scale = scale
-        self.lookup_table = Parameter(torch.Tensor(vocab_size, num_units))
-        nn.init.xavier_normal(self.lookup_table.data)
+        self.lookup_table = nn.Parameter(torch.Tensor(vocab_size, num_units))
+        nn.init.xavier_normal_(self.lookup_table.data)
         if self.zeros_pad:
             self.lookup_table.data[0, :].fill_(0)
 
@@ -54,7 +54,7 @@ class WordEmbedding(nn.Module):
         if self.scale:
             outputs = outputs * (self.num_units ** 0.5)
 
-        return outputs
+        return outputs.cuda()
 
 
 class PositionEmbedding(nn.Module):

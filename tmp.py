@@ -1,6 +1,6 @@
 import os
 from nltk.tokenize import word_tokenize
-from sru import SRU
+import spacy
 
 SPACE = ' '
 data_path = os.getcwd()
@@ -24,8 +24,10 @@ raw_path = os.path.join(data_path, 'data/raw_data/altlex.tsv')
 #     print(len(frequency))
 
 
-def process_train(path):
-    sen_engs, sen_sims, seg_engs, seg_sims, labels = [], [], [], [], []
+def process_train(path, tokenizer):
+    examples = []
+    engs, sims = [], []
+    seg_engs, seg_sims, labels = [], [], []
     idx = 1
     with open(path, 'r', encoding='utf8') as fh:
         for line in fh:
@@ -34,12 +36,10 @@ def process_train(path):
             del line[0]
             if len(line) != 6:
                 print(idx)
-            eng = word_tokenize(SPACE.join(line[:3]).strip())
-            seg_engs.append([word_tokenize(seg) for seg in line[:3]])
-            sim = word_tokenize(SPACE.join(line[3:]).strip())
-            seg_sims.append([word_tokenize(seg) for seg in line[3:]])
-            # sen_engs.append(eng)
-            # sen_sims.append(sim)
+            engs.append(list(tokenizer(SPACE.join(line[:3]).strip())))
+            sims.append(list(tokenizer(SPACE.join(line[3:]).strip())))
+            seg_engs.append([list(tokenizer(seg)) for seg in line[:3]])
+            seg_sims.append([list(tokenizer(seg)) for seg in line[3:]])
             idx += 1
     fh.close()
 
@@ -129,12 +129,13 @@ def gen_annotation(eng_length, sim_length, max_length, path, labels):
     f.close()
 
 
-# engs, sims, labels = process_train(train_path)
+tokenizer = spacy.load('en_core_web_lg')
+engs, sims, labels = process_train(train_path, tokenizer)
 # sens, labels = process_test(test_path)
-# english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
-#                         '"', '``', '-', '\'\'']
-# seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in engs]
-# seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim in sims]
+english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
+                        '"', '``', '-', '\'\'']
+seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in engs]
+seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim in sims]
 # seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sen] for sen in sens]
 
 # stat_altlex(seg_eng_filtered, seg_sim_filtered, labels)
@@ -151,45 +152,45 @@ def gen_annotation(eng_length, sim_length, max_length, path, labels):
 #     print(line)
 #     print(list(map(int, line)))
 
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-from torch.nn import utils as nn_utils
-
-batch_size = 3
-max_length = 4
-hidden_size = 4
-n_layers = 2
-
-tensor_in = torch.LongTensor([[1, 2, 3, 1], [1, 0, 0, 0], [4, 2, 0, 0]])
-tensor_in = Variable(tensor_in)  # [batch, seq, feature], [2, 3, 1]
-seq_lengths = torch.IntTensor([4, 1, 2])  # list of integers holding information about the batch size at each sequence step
+# import torch
+# import torch.nn as nn
+# from torch.autograd import Variable
+# from torch.nn import utils as nn_utils
+#
+# batch_size = 3
+# max_length = 4
+# hidden_size = 4
+# n_layers = 2
+#
+# tensor_in = torch.LongTensor([[1, 2, 3, 1], [1, 0, 0, 0], [4, 2, 0, 0]])
+# tensor_in = Variable(tensor_in)  # [batch, seq, feature], [2, 3, 1]
+# seq_lengths = torch.IntTensor([4, 1, 2])  # list of integers holding information about the batch size at each sequence step
 
 # pack it
 # pack = nn_utils.rnn.pack_padded_sequence(tensor_in, seq_lengths, batch_first=True)
 
 # initialize
-emb = nn.Embedding(5, 5, padding_idx=0)
+# emb = nn.Embedding(5, 5, padding_idx=0)
 # rnn = nn.RNN(5, hidden_size, n_layers, batch_first=True, bidirectional=True)
-rnn = SRU(5, hidden_size, n_layers, bidirectional=True)
-h0 = Variable(torch.randn(2*n_layers, batch_size, hidden_size))
+# rnn = SRU(5, hidden_size, n_layers, bidirectional=True)
+# h0 = Variable(torch.randn(2*n_layers, batch_size, hidden_size))
 
 # forward
-sorted_seq_lengths, indices = torch.sort(seq_lengths, dim=0, descending=True)
-_, desorted_indices = torch.sort(indices, descending=False)
-tensor_in = tensor_in[indices]
+# sorted_seq_lengths, indices = torch.sort(seq_lengths, dim=0, descending=True)
+# _, desorted_indices = torch.sort(indices, descending=False)
+# tensor_in = tensor_in[indices]
 # tensor_in = tensor_in.index_select(0, Variable(idx_sort))
 # seq_lengths = list(seq_lengths[idx_sort])
-in_emb = emb(tensor_in)
-in_emb = nn_utils.rnn.pack_padded_sequence(in_emb, sorted_seq_lengths, batch_first=True)
-out, state = rnn(in_emb, h0)
-state = state.view(n_layers, 2, batch_size, hidden_size)
-forward_state, backward_state = state[-1][0], state[-1][1]
-last_state = torch.cat([forward_state, backward_state], dim=1)
+# in_emb = emb(tensor_in)
+# in_emb = nn_utils.rnn.pack_padded_sequence(in_emb, sorted_seq_lengths, batch_first=True)
+# out, state = rnn(in_emb, h0)
+# state = state.view(n_layers, 2, batch_size, hidden_size)
+# forward_state, backward_state = state[-1][0], state[-1][1]
+# last_state = torch.cat([forward_state, backward_state], dim=1)
 # unpack
-unpacked, _ = nn_utils.rnn.pad_packed_sequence(out, batch_first=True)
-unpacked = unpacked[desorted_indices]
-print('unpacked', unpacked)
+# unpacked, _ = nn_utils.rnn.pad_packed_sequence(out, batch_first=True)
+# unpacked = unpacked[desorted_indices]
+# print('unpacked', unpacked)
 # print(out)
 
 print('hello world')
