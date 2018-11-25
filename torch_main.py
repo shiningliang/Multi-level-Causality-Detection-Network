@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2
+from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2, SCRN
 from models.torch_RelationNetwork import CRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
@@ -44,7 +44,7 @@ def parse_args():
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0003,
+    train_settings.add_argument('--weight_decay', type=float, default=0.0004,
                                 help='weight decay')
     train_settings.add_argument('--emb_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
@@ -96,7 +96,7 @@ def parse_args():
                                 help='kernels size (default: 2, 3, 4)')
     model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
-    model_settings.add_argument('--n_filter', type=int, default=100,
+    model_settings.add_argument('--n_filter', type=int, default=50,
                                 help='number of hidden units per layer (default: 256)')
     model_settings.add_argument('--n_class', type=int, default=2,
                                 help='class size (default: 2)')
@@ -104,8 +104,10 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='torch_full',
+    path_settings.add_argument('--task', default='training',
                                help='the task name')
+    path_settings.add_argument('--model', default='SCRN',
+                               help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
@@ -206,8 +208,8 @@ def train(args, file_paths):
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
-    # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
-    #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
+    model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
+                  args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
     # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
     #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
     # model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
@@ -221,8 +223,11 @@ def train(args, file_paths):
     #                        dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
-    model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
-                    args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
+    # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
+    #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
+    # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #              dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -291,9 +296,9 @@ def run():
     logger.info('Preparing the directories...')
     args.raw_dir = args.raw_dir
     args.processed_dir = args.processed_dir + args.task
-    args.model_dir = args.model_dir + args.task
-    args.result_dir = args.result_dir + args.task
-    args.summary_dir = args.summary_dir + args.task
+    args.model_dir = os.path.join(args.model_dir,  args.task, args.model)
+    args.result_dir = os.path.join(args.result_dir, args.task, args.model)
+    args.summary_dir = os.path.join(args.summary_dir, args.task, args.model)
     for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

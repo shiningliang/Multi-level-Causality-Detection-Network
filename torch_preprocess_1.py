@@ -331,7 +331,7 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
     total = 0
     meta = {}
     samples = []
-    fh = open(annotation_file, 'r', encoding='utf8')
+    # fh = open(annotation_file, 'r', encoding='utf8')
     for sentence in tqdm(sentences):
         total += 1
         tokens = np.zeros([max_len['full']], dtype=np.int32)
@@ -364,7 +364,7 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
                         'tokens_cur': tokens_cur,
                         'length': seq_len,
                         'cau_label': sentence['cau_label']})
-    fh.close()
+    # fh.close()
     with open(out_file, 'wb') as fo:
         pkl.dump(samples, fo)
     fo.close()
