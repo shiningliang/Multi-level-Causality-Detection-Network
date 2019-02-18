@@ -128,7 +128,10 @@ class SelfAttentive(object):
                 self.optimizer = tf.train.GradientDescentOptimizer(self.lr)
             else:
                 raise NotImplementedError('Unsupported optimizer: {}'.format(self.opt_type))
-            self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.norm)
+            # self.grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, self.all_params), self.norm)
             # self.grads = tf.gradients(self.loss, self.all_params)
-            self.train_op = self.optimizer.apply_gradients(zip(self.grads, self.all_params),
+            grads = self.optimizer.compute_gradients(self.loss)
+            gradients, variables = zip(*grads)
+            capped_grads, _ = tf.clip_by_global_norm(gradients, 5)
+            self.train_op = self.optimizer.apply_gradients(zip(capped_grads, variables),
                                                            global_step=self.global_step)

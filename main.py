@@ -5,9 +5,9 @@ import ujson as json
 import numpy as np
 import tensorflow as tf
 from preprocess import run_prepare
-# from models.SelfAttentiveSentenceEmbedding import SelfAttentive
-from models.Hierarchical import H0
-from models.Hierarchical_2 import H2
+from models.SelfAttentiveSentenceEmbedding import SelfAttentive
+# from models.Hierarchical import H0
+# from models.Hierarchical_2 import H2
 from util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
 import warnings
 
@@ -34,11 +34,11 @@ def parse_args():
                         help='specify gpu device')
 
     train_settings = parser.add_argument_group('train settings')
-    train_settings.add_argument('--num_steps', type=int, default=32000,
+    train_settings.add_argument('--num_steps', type=int, default=28000,
                                 help='num of step')
-    train_settings.add_argument('--period', type=int, default=400,
+    train_settings.add_argument('--period', type=int, default=350,
                                 help='period to save batch loss')
-    train_settings.add_argument('--checkpoint', type=int, default=1600,
+    train_settings.add_argument('--checkpoint', type=int, default=1400,
                                 help='checkpoint for evaluation')
     train_settings.add_argument('--eval_num_batches', type=int, default=10,
                                 help='num of batches for evaluation')
@@ -46,7 +46,7 @@ def parse_args():
                                 help='optimizer type')
     train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0001,
+    train_settings.add_argument('--weight_decay', type=float, default=0.001,
                                 help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5,
                                 help='dropout keep rate')
@@ -54,7 +54,7 @@ def parse_args():
                                 help='clip gradient norm')
     train_settings.add_argument('--train_batch', type=int, default=64,
                                 help='train batch size')
-    train_settings.add_argument('--valid_batch', type=int, default=32,
+    train_settings.add_argument('--valid_batch', type=int, default=1,
                                 help='dev batch size')
     train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
@@ -84,19 +84,21 @@ def parse_args():
                                 help='num of the filters')
     model_settings.add_argument('--n_layer', type=int, default=1,
                                 help='num of layers')
+    model_settings.add_argument('--n_hidden', type=int, default=128,
+                                help='num of layers')
     model_settings.add_argument('--alpha', type=float, default=1.0,
                                 help='coefficient for altlex extraction loss')
     model_settings.add_argument('--sa_da', type=int, default=128,
                                 help='dim of self attentive da')
     model_settings.add_argument('--sa_r', type=int, default=32,
                                 help='dim of self attentive r')
-    model_settings.add_argument('--pos_weight', type=int, default=2,
+    model_settings.add_argument('--pos_weight', type=int, default=1,
                                 help='positive example weight')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--raw_dir', default='data/raw_data',
                                help='the dir to store raw data')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
@@ -145,9 +147,9 @@ def train(args, file_paths, max_len):
     train_iterator = train_dataset.make_one_shot_iterator()
     valid_iterator = valid_dataset.make_one_shot_iterator()
     logger.info('Initialize the model...')
-    # model = SelfAttentive(args, iterator, token_embeddings, logger)
+    model = SelfAttentive(args, iterator, token_embeddings, logger)
     # model = H0(args, iterator, token_embeddings, logger)
-    model = H2(args, iterator, token_embeddings, logger)
+    # model = H2(args, iterator, token_embeddings, logger)
     sess_config = tf.ConfigProto(intra_op_parallelism_threads=8,
                                  inter_op_parallelism_threads=8,
                                  allow_soft_placement=True)

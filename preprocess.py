@@ -77,7 +77,7 @@ def preprocess_train(file_path, file_name, data_type, is_build):
     engs, sims, labels = [], [], []
     seg_engs, seg_sims = [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='utf8') as fh:
+    with open(data_path, 'r', encoding='ISO-8859-1') as fh:
         for line in fh:
             line = line.strip().split('\t')
             labels.append(int(line[0]))
@@ -181,18 +181,26 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     return examples, eval_examples, sentences, seg_filtered, labels
 
 
-def build_dict(data_path):
+def build_dict(corpus):
     dictionary = {}
-    with open(data_path, 'r', encoding='utf8') as fh:
-        for line in fh:
-            line = line.strip().split(' ')
-            fredist = nltk.FreqDist(line)
-            for localkey in fredist.keys():
-                if localkey in dictionary.keys():
-                    dictionary[localkey] = dictionary[localkey] + fredist[localkey]
-                else:
-                    # 如果字典中不存在
-                    dictionary[localkey] = fredist[localkey]  # 将当前词频添加到字典中
+    # with open(data_path, 'r', encoding='utf8') as fh:
+    #     for line in fh:
+    #         line = line.strip().split(' ')
+    #         fredist = nltk.FreqDist(line)
+    #         for localkey in fredist.keys():
+    #             if localkey in dictionary.keys():
+    #                 dictionary[localkey] = dictionary[localkey] + fredist[localkey]
+    #             else:
+    #                 # 如果字典中不存在
+    #                 dictionary[localkey] = fredist[localkey]  # 将当前词频添加到字典中
+    for line in corpus:
+        fredist = nltk.FreqDist(line)
+        for localkey in fredist.keys():
+            if localkey in dictionary.keys():
+                dictionary[localkey] = dictionary[localkey] + fredist[localkey]
+            else:
+                # 如果字典中不存在
+                dictionary[localkey] = fredist[localkey]  # 将当前词频添加到字典中
     return set(dictionary)
 
 
@@ -337,7 +345,7 @@ def run_prepare(config, flags):
     test_examples, test_evals, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                                     'test', config.is_build)
     if config.is_build:
-        corpus_dict = build_dict(flags.corpus_file)
+        corpus_dict = build_dict(train_corpus + valid_corpus + test_corpus)
         token_emb_mat, token2id = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='token embedding matrix')
         save(flags.token2id_file, token2id, message='word2index')

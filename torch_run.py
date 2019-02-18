@@ -8,12 +8,9 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2, SCRN
-from models.torch_RelationNetwork import CRN
-from models.torch_DPCNN import TextCNNDeep
-from models.torch_TextCNN import TextCNN
-from models.torch_TextRNN import TextRNN
-from torch_util_1 import get_batch, evaluate_batch, FocalLoss
+from models.torch_Hierarchical import Hierarchical_2
+from models.torch_SelfAttentive import SelfAttentive
+from torch_util_2 import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -22,7 +19,7 @@ def parse_args():
     """
     Parses command line arguments.
     """
-    parser = argparse.ArgumentParser('Causality')
+    parser = argparse.ArgumentParser('Medical')
     parser.add_argument('--prepare', action='store_true',
                         help='create the directories, prepare the vocabulary and embeddings')
     parser.add_argument('--build', action='store_true',
@@ -41,17 +38,17 @@ def parse_args():
     train_settings = parser.add_argument_group('train settings')
     train_settings.add_argument('--disable_cuda', action='store_true',
                                 help='Disable CUDA')
-    train_settings.add_argument('--lr', type=float, default=0.0001,
+    train_settings.add_argument('--lr', type=float, default=0.001,
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0003,
+    train_settings.add_argument('--weight_decay', type=float, default=0.001,
                                 help='weight decay')
     train_settings.add_argument('--emb_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
     train_settings.add_argument('--layer_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_train', type=int, default=32,
+    train_settings.add_argument('--batch_train', type=int, default=64,
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
@@ -71,9 +68,9 @@ def parse_args():
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--n_hidden', type=int, default=64,
+    model_settings.add_argument('--n_hidden', type=int, default=128,
                                 help='size of LSTM hidden units')
-    model_settings.add_argument('--n_layer', type=int, default=2,
+    model_settings.add_argument('--n_layer', type=int, default=1,
                                 help='num of layers')
     model_settings.add_argument('--is_fc', type=bool, default=False,
                                 help='whether to use focal loss')
@@ -105,11 +102,11 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='bootstrapped',
+    path_settings.add_argument('--task', default='training',
                                help='the task name')
-    path_settings.add_argument('--model', default='SCRN',
+    path_settings.add_argument('--model', default='SASE',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
@@ -134,27 +131,22 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     model.train()
     train_loss = []
     n_batch_loss = 0
-    weight = torch.from_numpy(np.array([0.2, 0.8], dtype=np.float32)).to(args.device)
+    entropy_loss = torch.nn.CrossEntropyLoss()
+    # weight = torch.from_numpy(np.array([0.2, 0.8], dtype=np.float32)).to(args.device)
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
-        # sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
         tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, _ = get_batch(train_file[start_idx:end_idx],
                                                                                         args.device)
 
         optimizer.zero_grad()
-        outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
-        # outputs = model(sentences)
-        # loss = compute_loss(logits=outputs, target=labels, length=seq_lens)
-        if args.is_fc:
-            criterion = FocalLoss(gamma=2, alpha=0.75)
-        else:
-            criterion = torch.nn.CrossEntropyLoss(weight)
-        loss = criterion(outputs, cau_labels)
-        # params = model.state_dict()
-        # l2_reg = torch.autograd.Variable(torch.FloatTensor(1), requires_grad=True).cuda()
-        # l2_reg = l2_reg + params['linear.weight'].norm(2) + params['linear.bias'].norm(2)
-        # loss += l2_reg * args.weight_decay
+        outputs, penal, weights = model(tokens, seq_lens)
+        # if args.is_fc:
+        #     criterion = FocalLoss(gamma=2, alpha=0.75)
+        # else:
+        #     criterion = torch.nn.CrossEntropyLoss()
+        # loss = criterion(outputs, cau_labels)
+        loss = entropy_loss(outputs.view(-1, args.n_class), cau_labels) + 0.5 * penal
         loss.backward()
         if args.clip > 0:
             # 梯度裁剪，输入是(NN参数，最大梯度范数，范数类型=2)，一般默认为L2范数
@@ -178,7 +170,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 
 
 def train(args, file_paths):
-    logger = logging.getLogger('Causality')
+    logger = logging.getLogger('Medical')
     logger.info('Loading train file...')
     with open(file_paths.train_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
@@ -206,31 +198,13 @@ def train(args, file_paths):
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
-    # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
-    #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
-    #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-    #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
-    # model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-    #                      args.n_filter, args.n_block, args.n_head, args.is_ffn,
-    #                      dropout, logger).to(device=args.device)
-    # model = Hierarchical_1(token_embeddings, args.max_len, args.n_class, args.n_level, args.n_hidden, args.n_layer,
-    #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_ffn,
+    # model = Hierarchical_2(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #                        dropout, logger).to(device=args.device)
-    model = Hierarchical_2(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                           args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                           dropout, logger).to(device=args.device)
-    # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
-    #                 args.is_sinusoid, dropout, logger).to(device=args.device)
-    # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
-    #                     dropout, logger).to(device=args.device)
-    # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
-    #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
-    # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
+    model = SelfAttentive(token_embeddings, args.n_class, args.n_hidden, args.n_layer, 128, 32,
+                          dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -279,7 +253,7 @@ def run():
     Prepares and runs the whole system.
     """
     args = parse_args()
-    logger = logging.getLogger('Causality')
+    logger = logging.getLogger('Medical')
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     # 是否存储日志
