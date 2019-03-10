@@ -6,16 +6,24 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 def get_batch(samples, device):
-    sentences, cau_labels, seq_lens = [], [], []
+    ids, tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens = [], [], [], [], [], [], []
     for sample in samples:
-        sentences.append(sample['tokens'])
+        ids.append(sample['id'])
+        tokens.append(sample['tokens'])
+        tokens_pre.append(sample['tokens_pre'])
+        tokens_alt.append(sample['tokens_alt'])
+        tokens_cur.append(sample['tokens_cur'])
         cau_labels.append(sample['cau_label'])
         seq_lens.append(sample['length'])
-    sentences = np.asarray(sentences, dtype=np.int64)
+    tokens = np.asarray(tokens, dtype=np.int64)
+    tokens_pre = np.asarray(tokens_pre, dtype=np.int64)
+    tokens_alt = np.asarray(tokens_alt, dtype=np.int64)
+    tokens_cur = np.asarray(tokens_cur, dtype=np.int64)
     cau_labels = np.asarray(cau_labels, dtype=np.int64)
     seq_lens = np.asarray(seq_lens, dtype=np.int64)
-    return torch.from_numpy(sentences).to(device), torch.from_numpy(cau_labels).to(device), \
-           torch.from_numpy(seq_lens).to(device)
+    return torch.from_numpy(tokens).to(device), torch.from_numpy(tokens_pre).to(device), \
+           torch.from_numpy(tokens_alt).to(device), torch.from_numpy(tokens_cur).to(device),\
+           torch.from_numpy(cau_labels).to(device), torch.from_numpy(seq_lens).to(device), ids
 
 
 def _sequence_mask(sequence_length, max_len=None):
@@ -66,16 +74,18 @@ def compute_loss(logits, target, length, weight):
     return loss
 
 
-def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, logger):
+def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_type, logger):
     losses = []
+    fp, fn = [], []
     causality_preds, causality_labels = [], []
     metrics = {}
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
         end_idx = start_idx + batch_size
-        sentences, cau_labels, seq_lens = get_batch(eval_file[start_idx:end_idx], device)
-        cau_outputs = model(sentences)
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(eval_file[start_idx:end_idx],
+                                                                                           device)
+        cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         cau_outputs = cau_outputs.detach()
         if is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
@@ -87,12 +97,21 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, logger
         cau_labels = cau_labels.cpu().numpy()
         causality_preds += cau_preds.tolist()
         causality_labels += cau_labels.tolist()
+        if data_type == 'valid':
+            for pred, label, eid in zip(cau_preds, cau_labels, eids):
+                if label == 1 and pred == 0:
+                    fn.append(eid)
+                if label == 0 and pred == 1:
+                    fp.append(eid)
 
     metrics['loss'] = np.mean(losses)
     metrics['acc'] = accuracy_score(causality_labels, causality_preds)
     metrics['precision'] = precision_score(causality_labels, causality_preds)
     metrics['recall'] = recall_score(causality_labels, causality_preds)
     metrics['f1'] = f1_score(causality_labels, causality_preds)
+    if data_type == 'valid':
+        metrics['fp'] = fp
+        metrics['fn'] = fn
     logger.info('Full confusion matrix')
     logger.info(confusion_matrix(causality_labels, causality_preds))
     return metrics

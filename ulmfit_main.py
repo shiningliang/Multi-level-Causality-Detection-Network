@@ -12,7 +12,7 @@ from fastai.text import *
 import torch
 import torch.optim as optim
 from ulmfit_preprocess import run_prepare
-from torch_util_1 import get_batch, evaluate_batch, FocalLoss
+from torch_util import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 

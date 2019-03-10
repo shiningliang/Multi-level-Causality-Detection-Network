@@ -8,12 +8,14 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import TCN, BiGRU, Hierarchical, Hierarchical_1, Hierarchical_2, SCRN
-from models.torch_RelationNetwork import CRN
-from models.torch_DPCNN import TextCNNDeep
+from models.torch_Hierarchical import Hierarchical, Hierarchical_1
+from models.torch_SCRN import SCRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
-from torch_util_1 import get_batch, evaluate_batch, FocalLoss
+from models.torch_MCIN import MCIN
+# from models.torch_RelationNetwork import CRN
+# from models.torch_DPCNN import TextCNNDeep
+from torch_util import get_batch, evaluate_batch, FocalLoss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -219,9 +221,9 @@ def train(args, file_paths):
     # model = Hierarchical_1(token_embeddings, args.max_len, args.n_class, args.n_level, args.n_hidden, args.n_layer,
     #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_ffn,
     #                        dropout, logger).to(device=args.device)
-    model = Hierarchical_2(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                           args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                           dropout, logger).to(device=args.device)
+    model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+                 dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
     # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
@@ -305,7 +307,7 @@ def run():
     logger.info('Preparing the directories...')
     args.raw_dir = args.raw_dir
     args.processed_dir = args.processed_dir + args.task
-    args.model_dir = os.path.join(args.model_dir,  args.task, args.model)
+    args.model_dir = os.path.join(args.model_dir, args.task, args.model)
     args.result_dir = os.path.join(args.result_dir, args.task, args.model)
     args.summary_dir = os.path.join(args.summary_dir, args.task, args.model)
     for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.summary_dir]:
