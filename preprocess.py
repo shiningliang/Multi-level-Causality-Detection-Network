@@ -339,12 +339,12 @@ def run_prepare(config, flags):
     train_examples, train_evals, train_corpus, train_seg, train_labels, max_len = preprocess_train(config.raw_dir,
                                                                                                    config.train_file,
                                                                                                    'train',
-                                                                                                   config.is_build)
+                                                                                                   config.build)
     valid_examples, valid_evals, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir,
                                                                                          config.valid_file, 'valid')
     test_examples, test_evals, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
-                                                                                    'test', config.is_build)
-    if config.is_build:
+                                                                                    'test', config.build)
+    if config.build:
         corpus_dict = build_dict(train_corpus + valid_corpus + test_corpus)
         token_emb_mat, token2id = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='token embedding matrix')

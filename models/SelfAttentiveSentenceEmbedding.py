@@ -59,7 +59,7 @@ class SelfAttentive(object):
         with tf.variable_scope('encoding', reuse=tf.AUTO_REUSE):
             self.H, _ = cu_rnn('bi-lstm', self.token_emb, self.n_hidden, self.n_batch, self.n_layer)
         if self.is_train:
-            self.H = tf.nn.dropout(self.H, self.dropout_keep_prob)
+            self.H = tf.nn.dropout(self.H, rate=1 - self.dropout_keep_prob)
 
     def _cal_attention(self):
         with tf.variable_scope('cal_attention', reuse=tf.AUTO_REUSE):
@@ -90,7 +90,7 @@ class SelfAttentive(object):
             self.flatten_M_T = tf.reshape(self.M_T, shape=[-1, self.r * 2 * self.n_hidden])
             self.label_dense_0 = tf.nn.relu(dense(self.flatten_M_T, hidden=2 * self.n_hidden, scope='dense_0'))
             if self.is_train:
-                self.label_dense_0 = tf.nn.dropout(self.label_dense_0, self.dropout_keep_prob)
+                self.label_dense_0 = tf.nn.dropout(self.label_dense_0, rate=1 - self.dropout_keep_prob)
 
             self.output = dense(self.label_dense_0, hidden=self.num_class, scope='output_labels')
 

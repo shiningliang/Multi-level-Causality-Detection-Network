@@ -119,8 +119,10 @@ def parse_args():
                                help='the test file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
-    path_settings.add_argument('--processed_dir', default='data/processed_data/',
+    path_settings.add_argument('--processed_dir', default='data/processed_data/torch',
                                help='the dir to store prepared data')
+    path_settings.add_argument('--outputs_dir', default='outputs/',
+                               help='the dir for outputs')
     path_settings.add_argument('--model_dir', default='models/',
                                help='the dir to store models')
     path_settings.add_argument('--result_dir', default='results/',
@@ -305,11 +307,10 @@ def run():
     else:
         args.device = torch.device('cpu')
     logger.info('Preparing the directories...')
-    args.raw_dir = args.raw_dir
-    args.processed_dir = args.processed_dir + args.task
-    args.model_dir = os.path.join(args.model_dir, args.task, args.model)
-    args.result_dir = os.path.join(args.result_dir, args.task, args.model)
-    args.summary_dir = os.path.join(args.summary_dir, args.task, args.model)
+    args.processed_dir = os.path.join(args.processed_dir, args.task)
+    args.model_dir = os.path.join(args.outputs_dir, args.task, args.model, args.model_dir)
+    args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
+    args.summary_dir = os.path.join(args.outputs_dir, args.task, args.model, args.summary_dir)
     for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

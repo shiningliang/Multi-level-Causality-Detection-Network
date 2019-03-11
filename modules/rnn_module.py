@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib as tc
-from tensorflow.contrib.cudnn_rnn.python.layers import cudnn_rnn
+from tensorflow.contrib import cudnn_rnn
 
 
 def nor_rnn(rnn_type, inputs, length, hidden_size, layer_num=1, dropout_keep_prob=None, concat=True):
@@ -24,18 +24,7 @@ def nor_rnn(rnn_type, inputs, length, hidden_size, layer_num=1, dropout_keep_pro
             outputs, state = tf.nn.bidirectional_dynamic_rnn(
                 cell_fw, cell_bw, inputs, sequence_length=length, dtype=tf.float32
             )
-        # state_fw, state_bw = state
-        # if rnn_type.endswith('lstm'):
-        #     c_fw, h_fw = state_fw
-        #     c_bw, h_bw = state_bw
-        #     state_fw, state_bw = h_fw, h_bw
-        # if concat:
-        #     outputs = tf.concat(outputs, 2)
-        #     state = tf.concat([state_fw, state_bw], 1)
-        # else:
-        #
-        #  = outputs[0] + outputs[1]
-        #     state = state_fw + state_bw
+
     return outputs
 
 
@@ -59,39 +48,9 @@ def get_nor_cell(rnn_type, hidden_size, dropout_keep_prob=None):
     return cell
 
 
-# def cudnn_rnn(rnn_type, direction, inputs, hidden_size, dropout, num_layers):
-#     cell = get_cudnn_cell(rnn_type, num_layers, hidden_size, direction, dropout)
-#     output, states = cell(inputs)
-#     states = states[0]
-#     if direction == 'undirectional':
-#         states = tf.unstack(states, num=num_layers)
-#         return output, tuple(states)
-#     fw_states = []
-#     bw_states = []
-#     for i, state in enumerate(tf.unstack(states, num=2 * num_layers)):
-#         if i % 2 == 0:
-#             fw_states.append(state)
-#         else:
-#             bw_states.append(state)
-#
-#     return output, tuple(fw_states), tuple(bw_states)
-#
-#
-# def get_cudnn_cell(rnn_type, num_layers, hidden_size, direction, dropout):
-#     if rnn_type.endswith('lstm'):
-#         cudnn_cell = cudnn_rnn.CudnnLSTM(num_layers, hidden_size, direction=direction, dropout=dropout)
-#     elif rnn_type.endswith('gru'):
-#         cudnn_cell = cudnn_rnn.CudnnGRU(num_layers, hidden_size, direction=direction, dropout=dropout)
-#     elif rnn_type.endswith('rnn'):
-#         cudnn_cell = cudnn_rnn.CudnnRNNTanh(num_layers, hidden_size, direction=direction, dropout=dropout)
-#     else:
-#         raise NotImplementedError('Unsuported rnn type: {}'.format(rnn_type))
-#     return cudnn_cell
-
-
 def cu_rnn(rnn_type, inputs, hidden_size, batch_size, layer_num=1):
     if not rnn_type.startswith('bi'):
-        cell = get_cu_cell(rnn_type, hidden_size, layer_num, cudnn_rnn.CUDNN_RNN_UNIDIRECTION)
+        cell = get_cu_cell(rnn_type, hidden_size, layer_num, 'unidirectional')
         inputs = tf.transpose(inputs, [1, 0, 2])
         c = tf.zeros([layer_num, batch_size, hidden_size], tf.float32)
         h = tf.zeros([layer_num, batch_size, hidden_size], tf.float32)

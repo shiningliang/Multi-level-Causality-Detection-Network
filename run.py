@@ -22,6 +22,8 @@ def parse_args():
     parser = argparse.ArgumentParser('Causality identification on AltLex')
     parser.add_argument('--prepare', action='store_true',
                         help='create the directories, prepare the vocabulary and embeddings')
+    parser.add_argument('--build', action='store_true',
+                        help='whether to build word dict and embeddings')
     parser.add_argument('--train', action='store_true',
                         help='train the model')
     parser.add_argument('--evaluate', action='store_true',
@@ -64,7 +66,9 @@ def parse_args():
                                 help='Batch size of data set shuffle')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--embed_size', type=int, default=300,
+    model_settings.add_argument('--max_len', type=int, default=200,
+                                help='max sentence length')
+    model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
     model_settings.add_argument('--filter_sizes', type=list, default=[3, 4, 5],
                                 help='size of the filters')
@@ -82,6 +86,8 @@ def parse_args():
                                 help='positive example weight')
 
     path_settings = parser.add_argument_group('path settings')
+    path_settings.add_argument('--task', default='bootstrapped',
+                               help='the task name')
     path_settings.add_argument('--raw_dir', default='data/raw_data',
                                help='the dir to store raw data')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
@@ -90,11 +96,11 @@ def parse_args():
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_gold.tsv',
                                help='the test file name')
-    path_settings.add_argument('--is_build', action='store_true',
-                               help='whether to build word dict and embeddings')
-    path_settings.add_argument('--processed_dir', default='data/processed_data',
+    path_settings.add_argument('--processed_dir', default='data/processed_data/tf',
                                help='the dir to store processed data')
-    path_settings.add_argument('--model_dir', default='checkpoints/',
+    path_settings.add_argument('--outputs_dir', default='outputs/',
+                               help='the dir for outputs')
+    path_settings.add_argument('--model_dir', default='models/',
                                help='the dir to store models')
     path_settings.add_argument('--result_dir', default='results/',
                                help='the dir to output the results')
@@ -226,6 +232,10 @@ def run():
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     logger.info('Preparing the directories...')
+    args.processed_dir = os.path.join(args.processed_dir, args.task)
+    args.model_dir = os.path.join(args.outputs_dir, args.task, args.model, args.model_dir)
+    args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
+    args.summary_dir = os.path.join(args.outputs_dir, args.task, args.model, args.summary_dir)
     for dir_path in [args.model_dir, args.result_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
@@ -247,7 +257,7 @@ def run():
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
             self.corpus_file = os.path.join(args.processed_dir, 'corpus.txt')
-            self.w2v_file = os.path.join(args.processed_dir, 'wiki_en_model.pkl')
+            self.w2v_file = './data/processed_data/wiki_en_model.pkl'
             self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.json')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')
 

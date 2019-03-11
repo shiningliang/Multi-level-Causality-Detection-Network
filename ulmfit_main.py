@@ -116,8 +116,10 @@ def parse_args():
                                help='the test file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
-    path_settings.add_argument('--processed_dir', default='data/processed_data/',
+    path_settings.add_argument('--processed_dir', default='data/processed_data/fastai',
                                help='the dir to store prepared data')
+    path_settings.add_argument('--outputs_dir', default='outputs/',
+                               help='the dir for outputs')
     path_settings.add_argument('--model_dir', default='models/',
                                help='the dir to store models')
     path_settings.add_argument('--result_dir', default='results/',
@@ -207,12 +209,14 @@ def train(args, file_paths):
                                           bs=32)
 
     learn = language_model_learner(data_lm, AWD_LSTM, drop_mult=0.7)
+    print(learn.model)
     # train the learner object with learning rate = 1e-2
     learn.fit_one_cycle(10, 1e-2)
     # save encoder
     learn.save_encoder('ft_enc')
     # use the data_clas object we created earlier to build a classifier with our fine-tuned encoder
     learn = text_classifier_learner(data_clas, AWD_LSTM, drop_mult=0.7)
+    print(learn.model)
     learn.load_encoder('ft_enc')
     learn.fit_one_cycle(10, 1e-2)
     # get predictions
@@ -285,11 +289,10 @@ def run():
     else:
         args.device = torch.device('cpu')
     logger.info('Preparing the directories...')
-    args.raw_dir = args.raw_dir
-    args.processed_dir = args.processed_dir + args.task
-    args.model_dir = os.path.join(args.model_dir,  args.task, args.model)
-    args.result_dir = os.path.join(args.result_dir, args.task, args.model)
-    args.summary_dir = os.path.join(args.summary_dir, args.task, args.model)
+    args.processed_dir = os.path.join(args.processed_dir, args.task)
+    args.model_dir = os.path.join(args.outputs_dir, args.task, args.model, args.model_dir)
+    args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
+    args.summary_dir = os.path.join(args.outputs_dir, args.task, args.model, args.summary_dir)
     for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)

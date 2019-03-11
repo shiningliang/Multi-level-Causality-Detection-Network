@@ -14,8 +14,8 @@ def get_record_parser(max_len):
                                            })
         eid = features['eid']
         token_ids = tf.reshape(tf.decode_raw(features['token_ids'], tf.int32), [max_len])
-        token_len = tf.to_int32(features['token_len'])
-        label = tf.to_int32(features['label'])
+        token_len = tf.cast(features['token_len'], dtype=tf.int32)
+        label = tf.cast(features['label'], dtype=tf.int32)
         return eid, token_ids, token_len, label
     return parse
 
