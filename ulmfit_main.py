@@ -13,6 +13,7 @@ import torch
 import torch.optim as optim
 from ulmfit_preprocess import run_prepare
 from torch_util import get_batch, evaluate_batch, FocalLoss
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -208,21 +209,35 @@ def train(args, file_paths):
     data_clas = TextClasDataBunch.from_df(path="", train_df=df_trn, valid_df=df_val, vocab=data_lm.train_ds.vocab,
                                           bs=32)
 
-    learn = language_model_learner(data_lm, AWD_LSTM, drop_mult=0.7)
+    learn = language_model_learner(data_lm, AWD_LSTM, drop_mult=0.5)
     print(learn.model)
     # train the learner object with learning rate = 1e-2
-    learn.fit_one_cycle(10, 1e-2)
+    learn.unfreeze()
+    learn.fit_one_cycle(4, 1e-2)
     # save encoder
     learn.save_encoder('ft_enc')
+
     # use the data_clas object we created earlier to build a classifier with our fine-tuned encoder
-    learn = text_classifier_learner(data_clas, AWD_LSTM, drop_mult=0.7)
+    learn = text_classifier_learner(data_clas, AWD_LSTM, drop_mult=0.5)
     print(learn.model)
     learn.load_encoder('ft_enc')
-    learn.fit_one_cycle(10, 1e-2)
+    learn.freeze_to(-2)
+    # learn.unfreeze()
+    learn.fit_one_cycle(4, 1e-2)
     # get predictions
     preds, targets = learn.get_preds()
     predictions = np.argmax(preds, axis=1)
     print(pd.crosstab(predictions, targets))
+    pred = predictions.numpy()
+    targ = targets.numpy()
+    acc = accuracy_score(targ, pred)
+    precision = precision_score(targ, pred)
+    recall = recall_score(targ, pred)
+    f1 = f1_score(targ, pred)
+    logger.info('Valid Acc - {}'.format(acc))
+    logger.info('Valid Precision - {}'.format(precision))
+    logger.info('Valid Recall - {}'.format(recall))
+    logger.info('Valid F1 - {}'.format(f1))
 
     # for ep in range(1, args.epochs + 1):
     #     logger.info('Training the model for epoch {}'.format(ep))

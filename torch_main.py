@@ -69,7 +69,7 @@ def parse_args():
                                 help='Number of threads in input pipeline')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--max_len', type=dict, default={'full': 200, 'pre': 100, 'alt': 10, 'cur': 200},
+    model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -264,6 +264,7 @@ def train(args, file_paths):
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
+            # TODO visualization
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
 

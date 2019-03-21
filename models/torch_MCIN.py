@@ -9,7 +9,7 @@ from time import time
 
 class MCIN(nn.Module):
     def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_kernels, n_filter,
-                 n_block, n_head, is_sinusoid, is_ffn, dropout, logger):
+                 n_block, n_head, is_sinusoid, is_ffn, dropout, is_test, logger):
         super(MCIN, self).__init__()
         start_t = time()
         n_dict, n_emb = token_embeddings.shape
@@ -22,6 +22,7 @@ class MCIN(nn.Module):
         self.is_ffn = is_ffn
         self.n_layer = n_layer
         self.n_filter = n_filter
+        self.is_test = is_test
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
         if is_sinusoid:
             self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)

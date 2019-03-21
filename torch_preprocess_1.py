@@ -260,7 +260,8 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             'Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens), len(combined_tokens),
                                                                             len(oov_tokens)))
         # token2id = {'<NULL>': 0, '<OOV>': 1}
-        embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
+        # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + len(combined_tokens) + 2, vec_size])
         for token in filtered_tokens:
             token2id[token] = len(token2id)
             embedding_mat[token2id[token]] = trained_embeddings[token]
@@ -277,9 +278,10 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             token2id[token] = len(token2id)
             embedding_mat[token2id[token]] = token_vec
         scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
-        for token in oov_tokens:
-            token2id[token] = len(token2id)
-            embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)
+        embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
+        # for token in oov_tokens:
+        #     token2id[token] = len(token2id)
+        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)
     else:
         embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
         embedding_mat[0] = np.zeros(vec_size)
@@ -392,7 +394,7 @@ def run_prepare(config, flags):
         segs = [train_seg, valid_seg, test_seg]
         for t, s, l in zip(types, segs, labels):
             gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
-        save(flags.corpus_file, train_corpus + valid_corpus + test_corpus, 'corpus')
+        save(flags.corpus_file, train_corpus, 'corpus')
         corpus_dict = build_dict(flags.corpus_file)
         token_emb_mat, token2id = gen_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='embeddings')
