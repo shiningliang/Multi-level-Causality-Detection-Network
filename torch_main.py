@@ -113,9 +113,9 @@ def parse_args():
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
-    path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
+    path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
-    path_settings.add_argument('--test_file', default='altlex_gold.tsv',
+    path_settings.add_argument('--test_file', default='altlex_test.tsv',
                                help='the test file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
@@ -188,16 +188,28 @@ def train(args, file_paths):
         train_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid file...')
-    with open(file_paths.test_record_file, 'rb') as fh:
+    with open(file_paths.valid_record_file, 'rb') as fh:
         valid_file = pkl.load(fh)
+    fh.close()
+    logger.info('Loading test file...')
+    with open(file_paths.test_record_file, 'rb') as fh:
+        test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading train meta...')
     with open(file_paths.train_meta, 'r') as fh:
         train_meta = json.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
-    with open(file_paths.test_meta, 'r') as fh:
+    with open(file_paths.valid_meta, 'r') as fh:
         valid_meta = json.load(fh)
+    fh.close()
+    logger.info('Loading test meta...')
+    with open(file_paths.test_meta, 'r') as fh:
+        test_meta = json.load(fh)
+    fh.close()
+    logger.info('Loading id to token file...')
+    with open(file_paths.id2token_file, 'r') as fh:
+        id2token = json.load(fh)
     fh.close()
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
@@ -205,8 +217,10 @@ def train(args, file_paths):
     fh.close()
     train_num = train_meta['total']
     valid_num = valid_meta['total']
+    test_num = test_meta['total']
+
     logger.info('Loading shape meta...')
-    logger.info('Num train data {} Num valid data {}'.format(train_num, valid_num))
+    logger.info('Num train data {} valid data {} test data'.format(train_num, valid_num, test_num))
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
@@ -265,6 +279,7 @@ def train(args, file_paths):
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
             # TODO visualization
+
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
 
@@ -336,6 +351,7 @@ def run():
             self.w2v_file = './data/processed_data/wiki_en_model.pkl'
             self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.pkl')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')
+            self.id2token_file = os.path.join(args.processed_dir, 'id2token.json')
 
     file_paths = FilePaths()
     if args.prepare:

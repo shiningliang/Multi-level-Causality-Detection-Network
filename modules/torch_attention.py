@@ -116,6 +116,7 @@ class Multihead_Attention(nn.Module):
         self.num_heads = num_heads
         self.dropout_rate = dropout
         self.causality = causality
+        self.atten_weights = None
         self.Q_proj = nn.Sequential(nn.Linear(self.num_units, self.num_units), nn.ReLU())
         self.K_proj = nn.Sequential(nn.Linear(self.num_units, self.num_units), nn.ReLU())
         self.V_proj = nn.Sequential(nn.Linear(self.num_units, self.num_units), nn.ReLU())
@@ -168,6 +169,7 @@ class Multihead_Attention(nn.Module):
 
         # Activation
         outputs = F.softmax(outputs, dim=-1)  # (h*N, T_q, T_k)
+        self.atten_weights = outputs
 
         # Query Masking
         query_masks = torch.sign(torch.abs(torch.sum(mini_batch, dim=-1)))  # (N, T_q)

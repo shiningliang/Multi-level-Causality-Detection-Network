@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as functional
 from torch.autograd import Variable
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+import seaborn
 
 
 def get_batch(samples, device):
@@ -87,6 +88,20 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
                                                                                            device)
         cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         cau_outputs = cau_outputs.detach()
+
+        nhead = 4
+        for block in [1, 3]:
+            logger.info('Block - {}'.format(block + 1))
+            for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
+                head_idx = head
+                tail_idx = head_idx + nhead
+                atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
+                atten_weights = atten_weights.cpu().numpy()
+                for h in range(nhead):
+                    logger.info('Head - {}'.format(h + 1))
+                    print(atten_weights[h])
+                    # draw(atten_weights[h])
+
         if is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
         else:
@@ -238,3 +253,33 @@ class FocalLoss(torch.nn.Module):
             return loss.mean()
         else:
             return loss.sum()
+
+
+def visulization(model, data_num, batch_size, eval_file, id2token, device, logger):
+    model.eval()
+    for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
+        start_idx = batch
+        end_idx = start_idx + batch_size
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(eval_file[start_idx:end_idx],
+                                                                                           device)
+        cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
+        cau_outputs = cau_outputs.detach()
+
+        nhead = 4
+        for block in [1, 3]:
+            logger.info('Block - {}'.format(block + 1))
+            for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
+                head_idx = head
+                tail_idx = head_idx + nhead
+                atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
+                atten_weights = atten_weights.cpu().numpy()
+                for h in range(nhead):
+                    logger.info('Head - {}'.format(h + 1))
+                    print(atten_weights[h])
+                    # draw(atten_weights[h])
+
+
+def draw(data, x, y, ax):
+    seaborn.heatmap(data,
+                    xticklabels=x, square=True, yticklabels=y, vmin=0.0, vmax=1.0,
+                    cbar=False, ax=ax)

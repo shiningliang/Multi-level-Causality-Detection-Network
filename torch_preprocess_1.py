@@ -288,7 +288,8 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
         embedding_mat[1] = np.zeros(vec_size)
         for token in corpus_dict:
             token2id[token] = len(token2id)
-    return embedding_mat, token2id
+    id2token = dict(zip(token2id.values(), token2id.keys()))
+    return embedding_mat, token2id, id2token
 
 
 def seg_length(sentences):
@@ -385,7 +386,7 @@ def run_prepare(config, flags):
     train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
                                                                              'train', config.build)
     valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
-                                                                            'valid')
+                                                                            'valid', config.build)
     test_examples, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                         'test', config.build)
     if config.build:
@@ -396,9 +397,10 @@ def run_prepare(config, flags):
             gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
         save(flags.corpus_file, train_corpus, 'corpus')
         corpus_dict = build_dict(flags.corpus_file)
-        token_emb_mat, token2id = gen_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
+        token_emb_mat, token2id, id2token = gen_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='embeddings')
-        save(flags.token2id_file, token2id, message='word2index')
+        save(flags.token2id_file, token2id, message='token to index')
+        save(flags.id2token_file, id2token, message='index to token')
     else:
         with open(flags.token2id_file, 'r') as fh:
             token2id = json.load(fh)

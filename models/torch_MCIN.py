@@ -9,7 +9,7 @@ from time import time
 
 class MCIN(nn.Module):
     def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_kernels, n_filter,
-                 n_block, n_head, is_sinusoid, is_ffn, dropout, is_test, logger):
+                 n_block, n_head, is_sinusoid, is_ffn, dropout, logger, is_test=None):
         super(MCIN, self).__init__()
         start_t = time()
         n_dict, n_emb = token_embeddings.shape
@@ -79,12 +79,12 @@ class MCIN(nn.Module):
             x_word_emb += self.position_embedding(x)
         else:
             x_word_emb += self.position_embedding(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda())
-        y_encoder = self.emb_dropout(x_word_emb)
+        y_embeded = self.emb_dropout(x_word_emb)
         for i in range(self.n_block):
-            y_encoder = self.__getattr__('self_attention_%d' % i)(y_encoder)
+            y_attended = self.__getattr__('self_attention_%d' % i)(y_embeded)
             if self.is_ffn:
-                y_encoder = self.__getattr__('feed_forward_%d' % i)(y_encoder)
-        y_word = torch.reshape(y_encoder, [-1, self.max_len * self.att_hidden])
+                y_transformed = self.__getattr__('feed_forward_%d' % i)(y_attended)
+        y_word = torch.reshape(y_transformed, [-1, self.max_len * self.att_hidden])
         y_word = self.word_fc(y_word)
 
         x_word_emb = nn_utils.rnn.pack_padded_sequence(x_word_emb, sorted_seq_lens, batch_first=True)
