@@ -3,7 +3,10 @@ import torch
 import torch.nn.functional as functional
 from torch.autograd import Variable
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+import matplotlib.pyplot as plt
 import seaborn
+seaborn.set_context(context="talk")
+plt.switch_backend('agg')
 
 
 def get_batch(samples, device):
@@ -88,20 +91,6 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
                                                                                            device)
         cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         cau_outputs = cau_outputs.detach()
-
-        nhead = 4
-        for block in [1, 3]:
-            logger.info('Block - {}'.format(block + 1))
-            for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
-                logger.info('Sample - {}'.format(idx))
-                head_idx = head
-                tail_idx = head_idx + nhead
-                atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
-                atten_weights = atten_weights.cpu().numpy()
-                for h in range(nhead):
-                    logger.info('Head - {}'.format(h + 1))
-                    print(atten_weights[h])
-                    # draw(atten_weights[h])
 
         if is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
@@ -256,43 +245,50 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
-def visulization(model, data_num, batch_size, eval_file, id2token_file, device, logger):
+def visulization(model, data_num, batch_size, test_file, device, id2token_file, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
         end_idx = start_idx + batch_size
-        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(eval_file[start_idx:end_idx],
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(test_file[start_idx:end_idx],
                                                                                            device)
         cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
-        cau_outputs = cau_outputs.detach()
-        tokens = tokens.cpu().numpy()
 
         nhead = 4
-        for block in [1, 3]:
-            logger.info('Block - {}'.format(block + 1))
-            for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
-                logger.info('Sample - {}'.format(idx))
-                head_idx = head
-                tail_idx = head_idx + nhead
-                atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
-                atten_weights = atten_weights.cpu().numpy()
+        nblock = 4
+        tokens = tokens.cpu().numpy()
+        seq_lens = seq_lens.cpu().numpy()
+        nbatch = len(tokens)
+        for block in range(nblock):
+            # logger.info('Block - {}'.format(block + 1))
+            fig, axs = plt.subplots(1, 4, figsize=(16, 9))
+            for idx in range(nbatch):
+                sample = trans_ids(tokens[idx][:seq_lens[idx]], id2token_file)
+                # logger.info('Sample {} - {}'.format(eids[idx], sample))
+                atten_weights = model.transformer.blocks[block].self_attn.attn[idx].detach().cpu().numpy()
+                # atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
+                # atten_weights = atten_weights.cpu().numpy()
                 for h in range(nhead):
-                    logger.info('Head - {}'.format(h + 1))
-                    print(atten_weights[h])
-                    # draw(atten_weights[h])
+                    # logger.info('Head - {}'.format(h + 1))
+                    # print(atten_weights[h])
+                    axs[h].set_title('head_' + str(h), fontsize=12)
+                    axs[h].tick_params(axis='x', labelsize=10)
+                    axs[h].tick_params(axis='y', labelsize=10)
+                    draw(atten_weights[h][:seq_lens[idx], :seq_lens[idx]], sample, sample if h == 0 else [], axs[h])
+                plt.savefig('./pictures/block_' + str(block + 1) + '_sample_' + str(eids[idx]))
 
 
 def trans_ids(ids, id2token_file):
-    tokens = ""
-    for id in ids:
-        tokens += id2token_file[id]
-        tokens += " "
-    tokens.strip()
+    tokens = []
+    for tid in ids:
+        # if tid > 0:
+        tokens.append(id2token_file[str(tid)])
+        # else:
+        #     break
 
     return tokens
 
 
 def draw(data, x, y, ax):
-    seaborn.heatmap(data,
-                    xticklabels=x, square=True, yticklabels=y, vmin=0.0, vmax=1.0,
-                    cbar=False, ax=ax)
+    seaborn.heatmap(data, linewidths=0.05, xticklabels=x, square=True, yticklabels=y, vmin=0.0, vmax=1.0,
+                    cbar=False, ax=ax, cmap='Blues')

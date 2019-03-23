@@ -12,10 +12,10 @@ from models.torch_Hierarchical import Hierarchical, Hierarchical_1
 from models.torch_SCRN import SCRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
-from models.torch_MCIN import MCIN
+from models.torch_MCIN_s import MCIN
 # from models.torch_RelationNetwork import CRN
 # from models.torch_DPCNN import TextCNNDeep
-from torch_util import get_batch, evaluate_batch, FocalLoss
+from torch_util import get_batch, evaluate_batch, FocalLoss, visulization
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -49,13 +49,13 @@ def parse_args():
                                 help='gradient clip, -1 means no clip (default: 0.35)')
     train_settings.add_argument('--weight_decay', type=float, default=0.0003,
                                 help='weight decay')
-    train_settings.add_argument('--emb_dropout', type=float, default=0.5,
+    train_settings.add_argument('--emb_dropout', type=float, default=0.3,
                                 help='dropout keep rate')
-    train_settings.add_argument('--layer_dropout', type=float, default=0.5,
+    train_settings.add_argument('--layer_dropout', type=float, default=0.3,
                                 help='dropout keep rate')
     train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
-    train_settings.add_argument('--batch_eval', type=int, default=4,
+    train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
     train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
@@ -109,7 +109,7 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='SCRN',
+    path_settings.add_argument('--model', default='MCIN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
@@ -278,7 +278,7 @@ def train(args, file_paths):
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
-            # TODO visualization
+            visulization(model, test_num, args.batch_eval, test_file, args.device, id2token_file, logger)
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)

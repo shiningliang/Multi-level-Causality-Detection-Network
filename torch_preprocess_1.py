@@ -142,7 +142,8 @@ def preprocess_test(file_path, file_name, data_type, is_build=False, tokenizer=N
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
     sen_filtered = [[word.lower() for word in sentence if word not in english_punctuations] for sentence in sentences]
-    seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in segments]
+    seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in
+                    segments]
     total = 0
     for label, sen, seg in zip(labels, sen_filtered, seg_filtered):
         total += 1
@@ -256,39 +257,42 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
                 combined_tokens.append(token)
         combined_tokens = set(combined_tokens)
         oov_tokens = oov_tokens.difference(combined_tokens)
-        print(
-            'Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens), len(combined_tokens),
-                                                                            len(oov_tokens)))
         # token2id = {'<NULL>': 0, '<OOV>': 1}
         # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
-        embedding_mat = np.zeros([len(filtered_tokens) + len(combined_tokens) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
         for token in filtered_tokens:
             token2id[token] = len(token2id)
             embedding_mat[token2id[token]] = trained_embeddings[token]
-        for token in combined_tokens:
-            tokens = token.split('-')
+
+        combined = 0
+        for tokens in combined_tokens:
+            sub_tokens = tokens.split('-')
             token_vec = np.zeros([vec_size])
             in_emb = 0
-            for t in tokens:
+            for t in sub_tokens:
                 if t in filtered_tokens:
                     token_vec += trained_embeddings[t]
                     in_emb += 1
-            if in_emb == 0:
-                continue
-            token2id[token] = len(token2id)
-            embedding_mat[token2id[token]] = token_vec
+            if in_emb > 0:
+                combined += 1
+                token2id[tokens] = len(token2id)
+                embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
         scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
         embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
         # for token in oov_tokens:
         #     token2id[token] = len(token2id)
-        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)
+        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)\
+        print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
+                                                                              combined,
+                                                                              len(oov_tokens)))
     else:
         embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
         embedding_mat[0] = np.zeros(vec_size)
         embedding_mat[1] = np.zeros(vec_size)
         for token in corpus_dict:
             token2id[token] = len(token2id)
-    id2token = dict(zip(token2id.values(), token2id.keys()))
+    id2token = dict([val, key] for key, val in token2id.items())
+    # print(len(token2id), len(id2token), len(embedding_mat))
     return embedding_mat, token2id, id2token
 
 
