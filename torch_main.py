@@ -55,7 +55,7 @@ def parse_args():
                                 help='dropout keep rate')
     train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
-    train_settings.add_argument('--batch_eval', type=int, default=64,
+    train_settings.add_argument('--batch_eval', type=int, default=4,
                                 help='dev batch size')
     train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
@@ -209,7 +209,7 @@ def train(args, file_paths):
     fh.close()
     logger.info('Loading id to token file...')
     with open(file_paths.id2token_file, 'r') as fh:
-        id2token = json.load(fh)
+        id2token_file = json.load(fh)
     fh.close()
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
@@ -220,7 +220,7 @@ def train(args, file_paths):
     test_num = test_meta['total']
 
     logger.info('Loading shape meta...')
-    logger.info('Num train data {} valid data {} test data'.format(train_num, valid_num, test_num))
+    logger.info('Num train data {} valid data {} test data {}'.format(train_num, valid_num, test_num))
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')

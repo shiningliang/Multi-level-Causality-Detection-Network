@@ -93,6 +93,7 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
         for block in [1, 3]:
             logger.info('Block - {}'.format(block + 1))
             for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
+                logger.info('Sample - {}'.format(idx))
                 head_idx = head
                 tail_idx = head_idx + nhead
                 atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
@@ -255,7 +256,7 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
-def visulization(model, data_num, batch_size, eval_file, id2token, device, logger):
+def visulization(model, data_num, batch_size, eval_file, id2token_file, device, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
@@ -264,11 +265,13 @@ def visulization(model, data_num, batch_size, eval_file, id2token, device, logge
                                                                                            device)
         cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         cau_outputs = cau_outputs.detach()
+        tokens = tokens.cpu().numpy()
 
         nhead = 4
         for block in [1, 3]:
             logger.info('Block - {}'.format(block + 1))
             for idx, head in enumerate(range(0, nhead * batch_size, nhead)):
+                logger.info('Sample - {}'.format(idx))
                 head_idx = head
                 tail_idx = head_idx + nhead
                 atten_weights = model.__getattr__('self_attention_%d' % block).atten_weights[head_idx:tail_idx].detach()
@@ -277,6 +280,16 @@ def visulization(model, data_num, batch_size, eval_file, id2token, device, logge
                     logger.info('Head - {}'.format(h + 1))
                     print(atten_weights[h])
                     # draw(atten_weights[h])
+
+
+def trans_ids(ids, id2token_file):
+    tokens = ""
+    for id in ids:
+        tokens += id2token_file[id]
+        tokens += " "
+    tokens.strip()
+
+    return tokens
 
 
 def draw(data, x, y, ax):
