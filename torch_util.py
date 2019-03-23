@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn
+import os
 seaborn.set_context(context="talk")
 plt.switch_backend('agg')
 
@@ -245,7 +246,7 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
-def visulization(model, data_num, batch_size, test_file, device, id2token_file, logger):
+def visulization(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
@@ -275,7 +276,8 @@ def visulization(model, data_num, batch_size, test_file, device, id2token_file, 
                     axs[h].tick_params(axis='x', labelsize=10)
                     axs[h].tick_params(axis='y', labelsize=10)
                     draw(atten_weights[h][:seq_lens[idx], :seq_lens[idx]], sample, sample if h == 0 else [], axs[h])
-                plt.savefig('./pictures/block_' + str(block + 1) + '_sample_' + str(eids[idx]))
+                file_name = 'block_' + str(block + 1) + '_sample_' + str(eids[idx])
+                plt.savefig(os.path.join(pics_dir, file_name))
 
 
 def trans_ids(ids, id2token_file):

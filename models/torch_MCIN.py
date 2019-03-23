@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import utils as nn_utils
-from modules.torch_attention import Multihead_Attention, FeedForward, PositionEmbedding, WordEmbedding, label_smoothing
+from modules.torch_transformer import Encoder, PositionalEncoding
 from modules.torch_TextCNNNet import TextCNNNet
 from sru import SRU
 from time import time
@@ -24,18 +24,15 @@ class MCIN(nn.Module):
         self.n_filter = n_filter
         self.is_test = is_test
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
+        self.pos_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
         # if is_sinusoid:
         #     self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)
         # else:
         #     self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
         self.emb_dropout = nn.Dropout(dropout['emb'])
-
+        self.transformer = Encoder(n_head, n_block, n_emb, dropout['layer'])
         self.seg_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], batch_first=True, bidirectional=True)
-        for i in range(self.n_block):
-            self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.att_hidden, n_head, dropout['layer']))
-            if self.is_ffn:
-                self.__setattr__('feed_forward_%d' % i, FeedForward(self.att_hidden,
-                                                                    [4 * self.att_hidden, self.att_hidden]))
+
         self.word_fc = nn.Linear(self.max_len * self.att_hidden, self.att_hidden)
 
         self.pre_encoder = TextCNNNet(n_emb, max_len['pre'], n_filter, n_kernels)
@@ -67,6 +64,7 @@ class MCIN(nn.Module):
         sorted_seq_lens, indices = torch.sort(seq_lens, dim=0, descending=True)
         _, desorted_indices = torch.sort(indices, descending=False)
         x = x[indices]
+        x_mask = (x != 0).unsqueeze(-2)
         x_word_emb = self.word_embedding(x)
         x_pre_word_emb = self.word_embedding(x_pre)
         x_alt_word_emb = self.word_embedding(x_alt)
@@ -79,12 +77,10 @@ class MCIN(nn.Module):
         #     x_word_emb += self.position_embedding(x)
         # else:
         #     x_word_emb += self.position_embedding(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda())
-        y_embeded = self.emb_dropout(x_word_emb)
-        for i in range(self.n_block):
-            y_embeded = self.__getattr__('self_attention_%d' % i)(y_embeded)
-            if self.is_ffn:
-                y_embeded = self.__getattr__('feed_forward_%d' % i)(y_embeded)
-        y_word = torch.reshape(y_embeded, [-1, self.max_len * self.att_hidden])
+        x_word_emb = self.pos_embedding(x_word_emb)
+        x_embeded = self.emb_dropout(x_word_emb)
+        y_transformed = self.transformer(x_embeded, x_mask)
+        y_word = torch.reshape(y_transformed, [-1, self.max_len * self.att_hidden])
         y_word = self.word_fc(y_word)
 
         x_word_emb = nn_utils.rnn.pack_padded_sequence(x_word_emb, sorted_seq_lens, batch_first=True)

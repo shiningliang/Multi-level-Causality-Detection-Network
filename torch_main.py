@@ -8,13 +8,12 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch_preprocess_1 import run_prepare
-from models.torch_Hierarchical import Hierarchical, Hierarchical_1
 from models.torch_SCRN import SCRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
-from models.torch_MCIN_s import MCIN
-# from models.torch_RelationNetwork import CRN
-# from models.torch_DPCNN import TextCNNDeep
+from models.torch_MCIN import MCIN
+from models.torch_TransBlocks import TB
+from models.torch_DPCNN import TextCNNDeep
 from torch_util import get_batch, evaluate_batch, FocalLoss, visulization
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
@@ -69,7 +68,7 @@ def parse_args():
                                 help='Number of threads in input pipeline')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
+    model_settings.add_argument('--max_len', type=dict, default={'full': 200, 'pre': 100, 'alt': 10, 'cur': 200},
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -126,7 +125,9 @@ def parse_args():
     path_settings.add_argument('--model_dir', default='models/',
                                help='the dir to store models')
     path_settings.add_argument('--result_dir', default='results/',
-                               help='the dir to output the results')
+                               help='the dir to store the results')
+    path_settings.add_argument('--pics_dir', default='pics/',
+                               help='the dir to store the pictures')
     path_settings.add_argument('--summary_dir', default='summary/',
                                help='the dir to write tensorboard summary')
     path_settings.add_argument('--log_path',
@@ -184,7 +185,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 def train(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading train file...')
-    with open(file_paths.train_record_file, 'rb') as fh:
+    with open(file_paths.valid_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid file...')
@@ -196,7 +197,7 @@ def train(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading train meta...')
-    with open(file_paths.train_meta, 'r') as fh:
+    with open(file_paths.valid_meta, 'r') as fh:
         train_meta = json.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
@@ -229,17 +230,9 @@ def train(args, file_paths):
     #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    # model = CRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-    #             args.n_filter, dropout=dropout, logger=logger).to(device=args.device)
-    # model = Hierarchical(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer, args.n_kernels,
-    #                      args.n_filter, args.n_block, args.n_head, args.is_ffn,
-    #                      dropout, logger).to(device=args.device)
-    # model = Hierarchical_1(token_embeddings, args.max_len, args.n_class, args.n_level, args.n_hidden, args.n_layer,
-    #                        args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_ffn,
-    #                        dropout, logger).to(device=args.device)
-    model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                 dropout, logger).to(device=args.device)
+    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #              dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
     # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
@@ -249,6 +242,9 @@ def train(args, file_paths):
     # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
     #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #              dropout, logger).to(device=args.device)
+    model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+               args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+               dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -278,7 +274,9 @@ def train(args, file_paths):
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
-            visulization(model, test_num, args.batch_eval, test_file, args.device, id2token_file, logger)
+            if args.model == 'MCIN' or args.model == 'TB':
+                visulization(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+                             args.pics_dir, logger)
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
@@ -323,11 +321,12 @@ def run():
     else:
         args.device = torch.device('cpu')
     logger.info('Preparing the directories...')
-    args.processed_dir = os.path.join(args.processed_dir, args.task)
+    args.processed_dir = os.path.join(args.processed_dir, args.task, args.model)
     args.model_dir = os.path.join(args.outputs_dir, args.task, args.model, args.model_dir)
     args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
+    args.pics_dir = os.path.join(args.outputs_dir, args.task, args.model, args.pics_dir)
     args.summary_dir = os.path.join(args.outputs_dir, args.task, args.model, args.summary_dir)
-    for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.summary_dir]:
+    for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.pics_dir, args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 

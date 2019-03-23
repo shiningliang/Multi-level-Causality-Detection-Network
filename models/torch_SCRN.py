@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import utils as nn_utils
-from modules.torch_attention import Multihead_Attention, FeedForward, PositionEmbedding, WordEmbedding, label_smoothing
+from modules.torch_transformer import PositionalEncoding
 from modules.torch_TextCNNNet import TextCNNNet
 from time import time
 
@@ -23,18 +23,11 @@ class SCRN(nn.Module):
         self.n_filter = n_filter
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
         if is_sinusoid:
-            self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)
-        else:
-            self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
+            self.position_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
         self.emb_dropout = nn.Dropout(dropout['emb'])
 
-        self.seg_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], batch_first=True, bidirectional=True)
-        # for i in range(self.n_block):
-        #     self.__setattr__('self_attention_%d' % i, Multihead_Attention(self.att_hidden, n_head, dropout['layer']))
-        #     if self.is_ffn:
-        #         self.__setattr__('feed_forward_%d' % i, FeedForward(self.att_hidden,
-        #                                                             [4 * self.att_hidden, self.att_hidden]))
-        # self.word_fc = nn.Linear(self.max_len * self.att_hidden, self.att_hidden)
+        self.seg_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], batch_first=True,
+                                  bidirectional=True)
 
         self.pre_encoder = TextCNNNet(n_emb, max_len['pre'], n_filter, n_kernels)
         self.alt_encoder = TextCNNNet(n_emb, max_len['alt'], n_filter, n_kernels)
@@ -74,9 +67,8 @@ class SCRN(nn.Module):
         x_cur_word_emb = self.emb_dropout(x_cur_word_emb)
 
         if self.sinusoid:
-            x_word_emb += self.position_embedding(x)
-        else:
-            x_word_emb += self.position_embedding(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda())
+            x_word_emb += self.position_embedding(x_word_emb)
+        x_word_emb = self.emb_dropout(x_word_emb)
         # y_encoder = self.emb_dropout(x_word_emb)
         # for i in range(self.n_block):
         #     y_encoder = self.__getattr__('self_attention_%d' % i)(y_encoder)
