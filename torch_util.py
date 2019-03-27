@@ -246,7 +246,7 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
-def visulization(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, logger):
+def visulization(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, nblock, nhead, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
@@ -255,14 +255,12 @@ def visulization(model, data_num, batch_size, test_file, device, id2token_file, 
                                                                                            device)
         cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
 
-        nhead = 4
-        nblock = 4
         tokens = tokens.cpu().numpy()
         seq_lens = seq_lens.cpu().numpy()
         nbatch = len(tokens)
         for block in range(nblock):
             # logger.info('Block - {}'.format(block + 1))
-            fig, axs = plt.subplots(1, 4, figsize=(16, 9))
+            fig, axs = plt.subplots(1, nhead, figsize=(16, 9))
             for idx in range(nbatch):
                 sample = trans_ids(tokens[idx][:seq_lens[idx]], id2token_file)
                 # logger.info('Sample {} - {}'.format(eids[idx], sample))

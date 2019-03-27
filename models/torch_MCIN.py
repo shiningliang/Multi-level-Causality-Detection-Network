@@ -24,8 +24,8 @@ class MCIN(nn.Module):
         self.n_filter = n_filter
         self.is_test = is_test
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
-        self.pos_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
-        # if is_sinusoid:
+        if is_sinusoid:
+            self.pos_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
         #     self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)
         # else:
         #     self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
@@ -73,11 +73,11 @@ class MCIN(nn.Module):
         x_alt_word_emb = self.emb_dropout(x_alt_word_emb)
         x_cur_word_emb = self.emb_dropout(x_cur_word_emb)
 
-        # if self.sinusoid:
+        if self.sinusoid:
+            x_word_emb = self.pos_embedding(x_word_emb)
         #     x_word_emb += self.position_embedding(x)
         # else:
         #     x_word_emb += self.position_embedding(torch.unsqueeze(torch.arange(0, x.size()[1]), 0).repeat(x.size(0), 1).long().cuda())
-        x_word_emb = self.pos_embedding(x_word_emb)
         x_embeded = self.emb_dropout(x_word_emb)
         y_transformed = self.transformer(x_embeded, x_mask)
         y_word = torch.reshape(y_transformed, [-1, self.max_len * self.att_hidden])

@@ -68,7 +68,7 @@ def parse_args():
                                 help='Number of threads in input pipeline')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--max_len', type=dict, default={'full': 200, 'pre': 100, 'alt': 10, 'cur': 200},
+    model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
                                 help='max length of sequence')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -82,7 +82,7 @@ def parse_args():
                                 help='whether to use self attention')
     model_settings.add_argument('--is_gated', type=bool, default=False,
                                 help='whether to use gated conv')
-    model_settings.add_argument('--n_block', type=int, default=4,
+    model_settings.add_argument('--n_block', type=int, default=2,
                                 help='attention block size (default: 2)')
     model_settings.add_argument('--n_head', type=int, default=4,
                                 help='attention head size (default: 2)')
@@ -185,7 +185,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 def train(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading train file...')
-    with open(file_paths.valid_record_file, 'rb') as fh:
+    with open(file_paths.train_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid file...')
@@ -197,7 +197,7 @@ def train(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading train meta...')
-    with open(file_paths.valid_meta, 'r') as fh:
+    with open(file_paths.train_meta, 'r') as fh:
         train_meta = json.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
@@ -230,9 +230,9 @@ def train(args, file_paths):
     #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
+    model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+                 dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
     # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
@@ -242,9 +242,9 @@ def train(args, file_paths):
     # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
     #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #              dropout, logger).to(device=args.device)
-    model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-               args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-               dropout, logger).to(device=args.device)
+    # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #            dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -276,7 +276,7 @@ def train(args, file_paths):
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
             if args.model == 'MCIN' or args.model == 'TB':
                 visulization(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-                             args.pics_dir, logger)
+                             args.pics_dir, args.n_block, args.n_head, logger)
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
@@ -321,7 +321,7 @@ def run():
     else:
         args.device = torch.device('cpu')
     logger.info('Preparing the directories...')
-    args.processed_dir = os.path.join(args.processed_dir, args.task, args.model)
+    args.processed_dir = os.path.join(args.processed_dir, args.task, str(args.max_len['full']))
     args.model_dir = os.path.join(args.outputs_dir, args.task, args.model, args.model_dir)
     args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
     args.pics_dir = os.path.join(args.outputs_dir, args.task, args.model, args.pics_dir)
