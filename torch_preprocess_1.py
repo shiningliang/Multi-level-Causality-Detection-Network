@@ -69,7 +69,7 @@ def seg_length(sentences):
     return seg_len
 
 
-def preprocess_train(file_path, file_name, data_type, is_build=False, tokenizer=None):
+def preprocess_train(file_path, file_name, data_type, is_build=False):
     print("Generating {} examples...".format(data_type))
     examples = []
     engs, sims = [], []
@@ -97,6 +97,9 @@ def preprocess_train(file_path, file_name, data_type, is_build=False, tokenizer=
     total = 0
     for label, eng, sim in zip(labels, seg_eng_filtered, seg_sim_filtered):
         total += 1
+        # for idx, seg in enumerate(eng):
+        #     if len(seg) == 0:
+        #         eng[idx] = ['<OOV>']
         examples.append({'eid': total,
                          'tokens': eng[0] + eng[1] + eng[2],
                          'tokens_pre': eng[0],
@@ -105,6 +108,9 @@ def preprocess_train(file_path, file_name, data_type, is_build=False, tokenizer=
                          'cau_label': label})
 
         total += 1
+        # for idx, seg in enumerate(sim):
+        #     if len(seg) == 0:
+        #         sim[idx] = ['<OOV>']
         examples.append({'eid': total,
                          'tokens': sim[0] + sim[1] + sim[2],
                          'tokens_pre': sim[0],
@@ -122,7 +128,7 @@ def preprocess_train(file_path, file_name, data_type, is_build=False, tokenizer=
     return examples, sentences, (seg_eng_filtered, seg_sim_filtered), labels
 
 
-def preprocess_test(file_path, file_name, data_type, is_build=False, tokenizer=None):
+def preprocess_test(file_path, file_name, data_type, is_build=False):
     print("Generating {} examples...".format(data_type))
     examples = []
     sentences, segments, labels = [], [], []
@@ -148,7 +154,7 @@ def preprocess_test(file_path, file_name, data_type, is_build=False, tokenizer=N
     for label, sen, seg in zip(labels, sen_filtered, seg_filtered):
         total += 1
         examples.append({'eid': total,
-                         'tokens': sen,
+                         'tokens': seg[0] + ['<OOV>'] + seg[2],
                          'tokens_pre': seg[0] if len(seg[0]) > 0 else ['<NULL>'],
                          'tokens_alt': seg[1] if len(seg[1]) > 0 else ['<NULL>'],
                          'tokens_cur': seg[2] if len(seg[2]) > 0 else ['<NULL>'],
@@ -196,47 +202,59 @@ def save(filename, obj, message=None):
 
 def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
-    embedding_dict = set()
-    trained_embeddings = {}
+
+    token2id = {'<NULL>': 0, '<OOV>': 1}
     if emb_file is not None:
         assert vec_size is not None
         with open(emb_file, 'rb') as fin:
             trained_embeddings = pkl.load(fin)
         fin.close()
         embedding_dict = set(trained_embeddings)
+        filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
+        oov_tokens = corpus_dict.difference(filtered_tokens)
+        combined_tokens = []
+        for token in oov_tokens:
+            if len(token.split('-')) > 1:
+                combined_tokens.append(token)
+        combined_tokens = set(combined_tokens)
+        oov_tokens = oov_tokens.difference(combined_tokens)
+        # token2id = {'<NULL>': 0, '<OOV>': 1}
+        # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
+        for token in filtered_tokens:
+            token2id[token] = len(token2id)
+            embedding_mat[token2id[token]] = trained_embeddings[token]
 
-    filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
-    oov_tokens = corpus_dict.difference(filtered_tokens)
-    combined_tokens = []
-    for token in oov_tokens:
-        if len(token.split('-')) > 1:
-            combined_tokens.append(token)
-    combined_tokens = set(combined_tokens)
-    oov_tokens = oov_tokens.difference(combined_tokens)
-    print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens), len(combined_tokens),
-                                                                          len(oov_tokens)))
-    NULL = "<NULL>"
-    OOV = "<OOV>"
-    token2id = {token: idx for idx, token in enumerate(filtered_tokens, 2)}
-    token2id[NULL] = 0
-    token2id[OOV] = 1
-    embedding_mat = np.zeros([len(token2id), vec_size])
-    for token in filtered_tokens:
-        embedding_mat[token2id[token]] = trained_embeddings[token]
-    for token in combined_tokens:
-        tokens = token.split('-')
-        token_vec = np.zeros([vec_size])
-        in_emb = 0
-        for t in tokens:
-            if t in filtered_tokens:
-                token_vec += trained_embeddings[t]
-                in_emb += 1
-        if in_emb == 0:
-            continue
-        token2id[token] = len(token2id)
-        embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
-    embedding_mat[1] = np.random.uniform(-0.25, 0.25, vec_size)
-    return embedding_mat, token2id
+        combined = 0
+        for tokens in combined_tokens:
+            sub_tokens = tokens.split('-')
+            token_vec = np.zeros([vec_size])
+            in_emb = 0
+            for t in sub_tokens:
+                if t in filtered_tokens:
+                    token_vec += trained_embeddings[t]
+                    in_emb += 1
+            if in_emb > 0:
+                combined += 1
+                token2id[tokens] = len(token2id)
+                embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
+        scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
+        embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
+        # for token in oov_tokens:
+        #     token2id[token] = len(token2id)
+        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)\
+        print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
+                                                                              combined,
+                                                                              len(oov_tokens)))
+    else:
+        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
+        embedding_mat[0] = np.zeros(vec_size)
+        embedding_mat[1] = np.zeros(vec_size)
+        for token in corpus_dict:
+            token2id[token] = len(token2id)
+    id2token = dict([val, key] for key, val in token2id.items())
+    # print(len(token2id), len(id2token), len(embedding_mat))
+    return embedding_mat, token2id, id2token
 
 
 def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
@@ -387,10 +405,10 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
 
 
 def run_prepare(config, flags):
-    train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
-                                                                             'train', config.build)
     valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
                                                                             'valid', config.build)
+    train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
+                                                                             'train', config.build)
     test_examples, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                         'test', config.build)
     if config.build:

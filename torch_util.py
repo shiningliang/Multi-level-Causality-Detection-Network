@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as functional
 from torch.autograd import Variable
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc, precision_recall_curve
 import matplotlib.pyplot as plt
 import seaborn
 import os
@@ -82,7 +82,7 @@ def compute_loss(logits, target, length, weight):
 def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_type, logger):
     losses = []
     fp, fn = [], []
-    causality_preds, causality_labels = [], []
+    causality_preds, causality_scores, causality_labels = [], [], []
     metrics = {}
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
@@ -100,8 +100,10 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
         loss = criterion(cau_outputs, cau_labels)
         losses.append(loss.item())
         cau_preds = torch.max(cau_outputs.cpu(), 1)[1].numpy()
+        cau_scores = cau_outputs.cpu()[:, 1].numpy()
         cau_labels = cau_labels.cpu().numpy()
         causality_preds += cau_preds.tolist()
+        causality_scores += cau_scores.tolist()
         causality_labels += cau_labels.tolist()
         if data_type == 'valid':
             for pred, label, eid in zip(cau_preds, cau_labels, eids):
@@ -115,12 +117,16 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
     metrics['precision'] = precision_score(causality_labels, causality_preds)
     metrics['recall'] = recall_score(causality_labels, causality_preds)
     metrics['f1'] = f1_score(causality_labels, causality_preds)
+    fpr, tpr, _ = roc_curve(causality_labels, causality_scores)
+    (precisions, recalls, _) = precision_recall_curve(causality_labels, causality_scores)
+    metrics['auc_roc'] = auc(fpr, tpr)
+    metrics['auc_prc'] = auc(recalls, precisions)
     if data_type == 'valid':
         metrics['fp'] = fp
         metrics['fn'] = fn
     logger.info('Full confusion matrix')
     logger.info(confusion_matrix(causality_labels, causality_preds))
-    return metrics
+    return metrics, fpr, tpr, precisions, recalls
     # tn, fp, fn, tp = confusion_matrix(auc_ref, auc_pre).ravel()
     # loss_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/loss'.format(data_type), simple_value=metrics['loss']), ])
     # acc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/acc'.format(data_type), simple_value=metrics['acc']), ])
@@ -246,7 +252,7 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
-def visulization(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, nblock, nhead, logger):
+def draw_att(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, nblock, nhead, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
         start_idx = batch
@@ -276,6 +282,20 @@ def visulization(model, data_num, batch_size, test_file, device, id2token_file, 
                     draw(atten_weights[h][:seq_lens[idx], :seq_lens[idx]], sample, sample if h == 0 else [], axs[h])
                 file_name = 'block_' + str(block + 1) + '_sample_' + str(eids[idx])
                 plt.savefig(os.path.join(pics_dir, file_name))
+
+
+def draw_curve(fpr, tpr, precisions, recalls, pics_dir):
+    f, (ax1, ax2) = plt.subplots(figsize=(21, 9), ncols=2)
+    ax1.plot(fpr, tpr)
+    ax1.set_title('ROC Curve')
+    ax1.set_xlabel('FPR')
+    ax1.set_ylabel('TPR')
+
+    ax2.plot(recalls, precisions)
+    ax2.set_title('Precision-Recall Curve')
+    ax2.set_xlabel('Recall')
+    ax2.set_ylabel('Precision')
+    plt.savefig(os.path.join(pics_dir, 'ROC-PRC-Curve.jpg'))
 
 
 def trans_ids(ids, id2token_file):

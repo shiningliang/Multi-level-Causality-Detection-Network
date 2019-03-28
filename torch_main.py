@@ -14,7 +14,7 @@ from models.torch_TextRNN import TextRNN
 from models.torch_MCIN import MCIN
 from models.torch_TransBlocks import TB
 from models.torch_DPCNN import TextCNNDeep
-from torch_util import get_batch, evaluate_batch, FocalLoss, visulization
+from torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -56,7 +56,7 @@ def parse_args():
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=20,
+    train_settings.add_argument('--epochs', type=int, default=2,
                                 help='train epochs')
     train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
@@ -82,7 +82,7 @@ def parse_args():
                                 help='whether to use self attention')
     model_settings.add_argument('--is_gated', type=bool, default=False,
                                 help='whether to use gated conv')
-    model_settings.add_argument('--n_block', type=int, default=2,
+    model_settings.add_argument('--n_block', type=int, default=4,
                                 help='attention block size (default: 2)')
     model_settings.add_argument('--n_head', type=int, default=4,
                                 help='attention head size (default: 2)')
@@ -185,7 +185,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 def train(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading train file...')
-    with open(file_paths.train_record_file, 'rb') as fh:
+    with open(file_paths.valid_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid file...')
@@ -197,7 +197,7 @@ def train(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading train meta...')
-    with open(file_paths.train_meta, 'r') as fh:
+    with open(file_paths.valid_meta, 'r') as fh:
         train_meta = json.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
@@ -252,19 +252,23 @@ def train(args, file_paths):
     # torch.backends.cudnn.benchmark = True
     max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
     FALSE = {}
+    ROC = {}
+    PRC = {}
     for ep in range(1, args.epochs + 1):
         logger.info('Training the model for epoch {}'.format(ep))
         avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
         logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
         logger.info('Evaluating the model for epoch {}'.format(ep))
-        eval_metrics = evaluate_batch(model, valid_num, args.batch_eval, valid_file, args.device, args.is_fc,
-                                      'valid', logger)
+        eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
+                                                                   args.device, args.is_fc, 'valid', logger)
         logger.info('Valid Loss - {}'.format(eval_metrics['loss']))
         logger.info('Valid Acc - {}'.format(eval_metrics['acc']))
         logger.info('Valid Precision - {}'.format(eval_metrics['precision']))
         logger.info('Valid Recall - {}'.format(eval_metrics['recall']))
         logger.info('Valid F1 - {}'.format(eval_metrics['f1']))
+        logger.info('Valid AUCROC - {}'.format(eval_metrics['auc_roc']))
+        logger.info('Valid AUCPRC - {}'.format(eval_metrics['auc_prc']))
         max_acc = max((eval_metrics['acc'], max_acc))
         max_p = max(eval_metrics['precision'], max_p)
         max_r = max(eval_metrics['recall'], max_r)
@@ -274,9 +278,11 @@ def train(args, file_paths):
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
+            ROC = {'FPR': fpr, 'TPR': tpr}
+            PRC = {'PRECISION': precision, 'RECALL': recall}
             if args.model == 'MCIN' or args.model == 'TB':
-                visulization(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-                             args.pics_dir, args.n_block, args.n_head, logger)
+                draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+                         args.pics_dir, args.n_block, args.n_head, logger)
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
@@ -290,6 +296,13 @@ def train(args, file_paths):
     with open(os.path.join(args.result_dir, 'FALSE.json'), 'w') as f:
         f.write(json.dumps(FALSE) + '\n')
     f.close()
+    with open(os.path.join(args.result_dir, 'ROC.json'), 'w') as f:
+        f.write(json.dumps(ROC) + '\n')
+    f.close()
+    with open(os.path.join(args.result_dir, 'PRC.json'), 'w') as f:
+        f.write(json.dumps(PRC) + '\n')
+    f.close()
+    draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 
 def run():
