@@ -56,7 +56,7 @@ def parse_args():
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=2,
+    train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
     train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
@@ -70,6 +70,8 @@ def parse_args():
     model_settings = parser.add_argument_group('model settings')
     model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
                                 help='max length of sequence')
+    model_settings.add_argument('--w2v_type', type=str, default='glove6B',
+                                help='type of the embeddings')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
     model_settings.add_argument('--n_hidden', type=int, default=64,
@@ -185,7 +187,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 def train(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading train file...')
-    with open(file_paths.valid_record_file, 'rb') as fh:
+    with open(file_paths.train_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid file...')
@@ -197,7 +199,7 @@ def train(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading train meta...')
-    with open(file_paths.valid_meta, 'r') as fh:
+    with open(file_paths.train_meta, 'r') as fh:
         train_meta = json.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
@@ -344,7 +346,7 @@ def run():
             os.makedirs(dir_path)
 
     class FilePaths(object):
-        def __init__(self):
+        def __init__(self, w2v_type):
             # 运行记录文件
             self.train_record_file = os.path.join(args.processed_dir, 'train.pkl')
             self.valid_record_file = os.path.join(args.processed_dir, 'valid.pkl')
@@ -360,12 +362,20 @@ def run():
             self.test_annotation = os.path.join(args.processed_dir, 'test_annotations.txt')
 
             self.corpus_file = os.path.join(args.processed_dir, 'corpus.txt')
-            self.w2v_file = './data/processed_data/wiki_en_model.pkl'
             self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.pkl')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')
             self.id2token_file = os.path.join(args.processed_dir, 'id2token.json')
 
-    file_paths = FilePaths()
+            if w2v_type == 'wiki':
+                self.w2v_file = './data/processed_data/wiki.en.pkl'
+            elif w2v_type == 'google':
+                self.w2v_file = './data/processed_data/google.news.pkl'
+            elif w2v_type == 'glove6':
+                self.w2v_file = './data/processed_data/glove.6B.pkl'
+            elif w2v_type == 'glove840':
+                self.w2v_file = './data/processed_data/glove.840B.pkl'
+
+    file_paths = FilePaths(args.w2v_type)
     if args.prepare:
         # max_seq_len, index_dim = run_prepare(args, file_paths)
         run_prepare(args, file_paths)

@@ -3,16 +3,21 @@ from gensim.scripts import glove2word2vec
 import os
 import shutil
 from sys import platform
+import pickle
 
 path = 'data/processed_data'
 
-# google = os.path.join(path, 'GoogleNews-vectors-negative300.bin')
-glove = os.path.join(path, 'glove.840B.txt')
-model = gensim.models.KeyedVectors.load_word2vec_format(glove, binary=False)
-model.save_word2vec_format(os.path.join(path, 'glove.840B.bin'), binary=True)
+google = os.path.join(path, 'GoogleNews-vectors-negative300.bin')
+model = gensim.models.KeyedVectors.load_word2vec_format(google, binary=True)
+# glove6B = os.path.join(path, 'glove.840B.bin')
+# model = gensim.models.KeyedVectors.load_word2vec_format(glove6B, binary=True)
+# model.save_word2vec_format(os.path.join(path, 'glove.840B.bin'), binary=True)
 
-# print(model['word'])
-# del model
+word_weights = {}
+for word in model.vocab:
+    word_weights[word] = model[word]
+with open(os.path.join(path, 'google.news.pkl'), 'wb') as file:
+    pickle.dump(word_weights, file)
 
 
 # 计算行数，就是单词数

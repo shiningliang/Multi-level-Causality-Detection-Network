@@ -8,6 +8,7 @@ import ujson as json
 import nltk
 from nltk.tokenize import word_tokenize
 from time import time
+import gensim
 
 np.random.seed(int(time()))
 
@@ -154,7 +155,7 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     for label, sen, seg in zip(labels, sen_filtered, seg_filtered):
         total += 1
         examples.append({'eid': total,
-                         'tokens': seg[0] + ['<OOV>'] + seg[2],
+                         'tokens': seg[0] + seg[1] + seg[2],
                          'tokens_pre': seg[0] if len(seg[0]) > 0 else ['<NULL>'],
                          'tokens_alt': seg[1] if len(seg[1]) > 0 else ['<NULL>'],
                          'tokens_cur': seg[2] if len(seg[2]) > 0 else ['<NULL>'],
@@ -210,6 +211,7 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             trained_embeddings = pkl.load(fin)
         fin.close()
         embedding_dict = set(trained_embeddings)
+        print('Num of tokens in corpus {}'.format(len(corpus_dict)))
         filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
         oov_tokens = corpus_dict.difference(filtered_tokens)
         combined_tokens = []
@@ -217,7 +219,7 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             if len(token.split('-')) > 1:
                 combined_tokens.append(token)
         combined_tokens = set(combined_tokens)
-        oov_tokens = oov_tokens.difference(combined_tokens)
+        # oov_tokens = oov_tokens.difference(combined_tokens)
         # token2id = {'<NULL>': 0, '<OOV>': 1}
         # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
         embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
@@ -240,9 +242,6 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
                 embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
         scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
         embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
-        # for token in oov_tokens:
-        #     token2id[token] = len(token2id)
-        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)\
         print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
                                                                               combined,
                                                                               len(oov_tokens)))
@@ -252,7 +251,8 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
         embedding_mat[1] = np.zeros(vec_size)
         for token in corpus_dict:
             token2id[token] = len(token2id)
-    id2token = dict([val, key] for key, val in token2id.items())
+    # id2token = dict([val, key] for key, val in token2id.items())
+    id2token = dict(zip(token2id.values(), token2id.keys()))
     # print(len(token2id), len(id2token), len(embedding_mat))
     return embedding_mat, token2id, id2token
 
@@ -419,7 +419,7 @@ def run_prepare(config, flags):
             gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
         save(flags.corpus_file, train_corpus, 'corpus')
         corpus_dict = build_dict(flags.corpus_file)
-        token_emb_mat, token2id, id2token = gen_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
+        token_emb_mat, token2id, id2token = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='embeddings')
         save(flags.token2id_file, token2id, message='token to index')
         save(flags.id2token_file, id2token, message='index to token')
