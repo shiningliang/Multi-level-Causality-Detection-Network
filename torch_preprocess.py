@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
+import pandas as pd
 import ujson as json
 import nltk
 from nltk.tokenize import word_tokenize
@@ -69,57 +70,54 @@ def seg_length(sentences):
     return seg_len
 
 
-def preprocess_train(file_path, file_name, data_type, is_build):
+def preprocess_train(file_path, file_name, data_type, is_build=False):
     print("Generating {} examples...".format(data_type))
     examples = []
-    engs, sims, labels = [], [], []
-    seg_engs, seg_sims = [], []
+    engs, sims = [], []
+    seg_engs, seg_sims, labels = [], [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='utf8') as fh:
-        for line in fh:
-            line = line.strip().split('\t')
-            labels.append(int(line[0]))
-            del line[0]
-            engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
-            sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
-            if is_build:
-                seg_engs.append([word_tokenize(seg) for seg in line[:3]])
-                seg_sims.append([word_tokenize(seg) for seg in line[3:]])
-    fh.close()
+    lines = open(data_path, 'r', encoding='ISO-8859-1').readlines()
+    for line in lines:
+        line = line.strip().split('\t')
+        labels.append(int(line[0]))
+        del line[0]
+        engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
+        sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
+        seg_engs.append([word_tokenize(seg) for seg in line[:3]])
+        seg_sims.append([word_tokenize(seg) for seg in line[3:]])
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
     eng_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in engs]
     sim_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in sims]
-    if is_build:
-        seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng
-                            in seg_engs]
-        seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim
-                            in seg_sims]
-    else:
-        seg_eng_filtered, seg_sim_filtered = [], []
+    seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng
+                        in seg_engs]
+    seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim
+                        in seg_sims]
+
     total = 0
-    seq_len = []
-    for label, eng, sim in zip(labels, eng_filtered, sim_filtered):
-        # if label == 0:
-        #     prob = np.random.random(1)
-        #     if prob <= 0.75:
-        #         continue
+    for label, eng, sim in zip(labels, seg_eng_filtered, seg_sim_filtered):
         total += 1
+        # for idx, seg in enumerate(eng):
+        #     if len(seg) == 0:
+        #         eng[idx] = ['<OOV>']
         examples.append({'eid': total,
-                         'tokens': eng,
+                         'tokens': eng[0] + eng[1] + eng[2],
+                         'tokens_pre': eng[0],
+                         'tokens_alt': eng[1],
+                         'tokens_cur': eng[2],
                          'cau_label': label})
-        seq_len.append(len(eng))
 
         total += 1
+        # for idx, seg in enumerate(sim):
+        #     if len(seg) == 0:
+        #         sim[idx] = ['<OOV>']
         examples.append({'eid': total,
-                         'tokens': sim,
+                         'tokens': sim[0] + sim[1] + sim[2],
+                         'tokens_pre': sim[0],
+                         'tokens_alt': sim[1],
+                         'tokens_cur': sim[2],
                          'cau_label': label})
-        seq_len.append(len(sim))
-    # stat_length(seq_len)
-    # print('Get {} total examples'.format(total))
-    # print('Get {} causal examples'.format(causal))
-    # print('Get {} non-causal examples'.format(non_causal))
     if is_build:
         sentences = []
         for eng_tokens, sim_tokens in zip(eng_filtered, sim_filtered):
@@ -128,7 +126,7 @@ def preprocess_train(file_path, file_name, data_type, is_build):
     else:
         sentences = []
     np.random.shuffle(examples)
-    return examples, sentences, (seg_eng_filtered, seg_sim_filtered), labels, max(seq_len)
+    return examples, sentences, (seg_eng_filtered, seg_sim_filtered), labels
 
 
 def preprocess_test(file_path, file_name, data_type, is_build=False):
@@ -136,34 +134,32 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     examples = []
     sentences, segments, labels = [], [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='ISO-8859-1') as fh:
-        for line in fh:
-            line = line.strip().split('\t')
-            num = int(line[-1])
-            labels.append(0 if num == 0 else 1)
-            sentences.append(word_tokenize(SPACE.join(line[:-1]).strip()))
-            if is_build:
-                segments.append([word_tokenize(seg) for seg in line[:-1]])
-    fh.close()
+    lines = open(data_path, 'r', encoding='ISO-8859-1').readlines()
+    for line in lines:
+        line = line.strip().split('\t')
+        num = int(line[-1])
+        del line[-1]
+        labels.append(0 if num == 0 else 1)
+        sentences.append(word_tokenize(SPACE.join(line).strip()))
+        if len(line) == 3:
+            segments.append([word_tokenize(seg) for seg in line])
+        else:
+            segments.append([['<NULL>'], word_tokenize(line[0]), word_tokenize(line[1])])
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
     sen_filtered = [[word.lower() for word in sentence if word not in english_punctuations] for sentence in sentences]
-    if is_build:
-        seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng
-                        in segments]
-    else:
-        seg_filtered = []
+    seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in
+                    segments]
     total = 0
-    for label, sen in zip(labels, sen_filtered):
+    for label, seg in zip(labels, seg_filtered):
         total += 1
         examples.append({'eid': total,
-                         'tokens': sen,
+                         'tokens': seg[0] + seg[1] + seg[2],
+                         'tokens_pre': seg[0] if len(seg[0]) > 0 else ['<NULL>'],
+                         'tokens_alt': seg[1] if len(seg[1]) > 0 else ['<NULL>'],
+                         'tokens_cur': seg[2] if len(seg[2]) > 0 else ['<NULL>'],
                          'cau_label': label})
-        # if label == 0:
-        #     non_causal += 1
-        # else:
-        #     causal += 1
     # stat(seq_len)
     # print('Get {} total examples'.format(total))
     # print('Get {} causal examples'.format(causal))
@@ -173,6 +169,28 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     else:
         sentences = []
     return examples, sentences, seg_filtered, labels
+
+
+def preprocess_transfer(file_path, file_name, data_type, is_build=False):
+    print("Generating {} examples...".format(data_type))
+    examples = []
+    data_path = os.path.join(file_path, file_name)
+
+    sem_df = pd.read_csv(data_path, sep=',')
+    total = 0
+    for i, row in sem_df.iterrows():
+        total += 1
+        pre = row['pre'] if len(row['pre']) > 0 else ['<NULL>']
+        mid = row['mid'] if len(row['mid']) > 0 else ['<NULL>']
+        cur = row['cur'] if len(row['cur']) > 0 else ['<NULL>']
+
+        examples.append({'eid': total,
+                         'tokens': pre + mid + cur,
+                         'tokens_pre': pre,
+                         'tokens_alt': mid,
+                         'tokens_cur': cur,
+                         'cau_label': row['label']})
+    return examples
 
 
 def build_dict(data_path):
@@ -207,49 +225,115 @@ def save(filename, obj, message=None):
 
 def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
-    embedding_dict = set()
-    trained_embeddings = {}
+
+    token2id = {'<NULL>': 0, '<OOV>': 1}
     if emb_file is not None:
         assert vec_size is not None
         with open(emb_file, 'rb') as fin:
             trained_embeddings = pkl.load(fin)
         fin.close()
         embedding_dict = set(trained_embeddings)
+        print('Num of tokens in corpus {}'.format(len(corpus_dict)))
+        filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
+        oov_tokens = corpus_dict.difference(filtered_tokens)
+        combined_tokens = []
+        for token in oov_tokens:
+            if len(token.split('-')) > 1:
+                combined_tokens.append(token)
+        combined_tokens = set(combined_tokens)
+        # oov_tokens = oov_tokens.difference(combined_tokens)
+        # token2id = {'<NULL>': 0, '<OOV>': 1}
+        # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
+        for token in filtered_tokens:
+            token2id[token] = len(token2id)
+            embedding_mat[token2id[token]] = trained_embeddings[token]
 
-    filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
-    oov_tokens = corpus_dict.difference(filtered_tokens)
-    combined_tokens = []
-    for token in oov_tokens:
-        if len(token.split('-')) > 1:
-            combined_tokens.append(token)
-    combined_tokens = set(combined_tokens)
-    oov_tokens = oov_tokens.difference(combined_tokens)
-    print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens), len(combined_tokens),
-                                                                          len(oov_tokens)))
-    NULL = "<NULL>"
-    OOV = "<OOV>"
-    token2id = {token: idx for idx, token in enumerate(filtered_tokens, 2)}
-    token2id[NULL] = 0
-    token2id[OOV] = 1
-    embedding_mat = np.zeros([len(token2id), vec_size])
-    for token in filtered_tokens:
-        embedding_mat[token2id[token]] = trained_embeddings[token]
-    token_tail = len(token2id)
-    for token in combined_tokens:
-        tokens = token.split('-')
-        token_vec = np.zeros([vec_size])
-        in_emb = 0
-        for t in tokens:
-            if t in filtered_tokens:
-                token_vec += trained_embeddings[t]
-                in_emb += 1
-        if in_emb == 0:
-            continue
-        token2id[token] = token_tail
-        embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
-        token_tail += 1
-    embedding_mat[1] = np.random.uniform(-0.25, 0.25)
-    return embedding_mat, token2id
+        combined = 0
+        for tokens in combined_tokens:
+            sub_tokens = tokens.split('-')
+            token_vec = np.zeros([vec_size])
+            in_emb = 0
+            for t in sub_tokens:
+                if t in filtered_tokens:
+                    token_vec += trained_embeddings[t]
+                    in_emb += 1
+            if in_emb > 0:
+                combined += 1
+                token2id[tokens] = len(token2id)
+                embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
+        scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
+        embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
+        print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
+                                                                              combined,
+                                                                              len(oov_tokens)))
+    else:
+        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
+        embedding_mat[0] = np.zeros(vec_size)
+        embedding_mat[1] = np.zeros(vec_size)
+        for token in corpus_dict:
+            token2id[token] = len(token2id)
+    # id2token = dict([val, key] for key, val in token2id.items())
+    id2token = dict(zip(token2id.values(), token2id.keys()))
+    # print(len(token2id), len(id2token), len(embedding_mat))
+    return embedding_mat, token2id, id2token
+
+
+def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
+    print("Generating {} embedding...".format(data_type))
+
+    token2id = {'<NULL>': 0, '<OOV>': 1}
+    if emb_file is not None:
+        assert vec_size is not None
+        with open(emb_file, 'rb') as fin:
+            trained_embeddings = pkl.load(fin)
+        fin.close()
+        embedding_dict = set(trained_embeddings)
+        filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
+        oov_tokens = corpus_dict.difference(filtered_tokens)
+        combined_tokens = []
+        for token in oov_tokens:
+            if len(token.split('-')) > 1:
+                combined_tokens.append(token)
+        combined_tokens = set(combined_tokens)
+        oov_tokens = oov_tokens.difference(combined_tokens)
+        # token2id = {'<NULL>': 0, '<OOV>': 1}
+        # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
+        for token in filtered_tokens:
+            token2id[token] = len(token2id)
+            embedding_mat[token2id[token]] = trained_embeddings[token]
+
+        combined = 0
+        for tokens in combined_tokens:
+            sub_tokens = tokens.split('-')
+            token_vec = np.zeros([vec_size])
+            in_emb = 0
+            for t in sub_tokens:
+                if t in filtered_tokens:
+                    token_vec += trained_embeddings[t]
+                    in_emb += 1
+            if in_emb > 0:
+                combined += 1
+                token2id[tokens] = len(token2id)
+                embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
+        scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
+        embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
+        # for token in oov_tokens:
+        #     token2id[token] = len(token2id)
+        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)\
+        print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
+                                                                              combined,
+                                                                              len(oov_tokens)))
+    else:
+        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
+        embedding_mat[0] = np.zeros(vec_size)
+        embedding_mat[1] = np.zeros(vec_size)
+        for token in corpus_dict:
+            token2id[token] = len(token2id)
+    id2token = dict([val, key] for key, val in token2id.items())
+    # print(len(token2id), len(id2token), len(embedding_mat))
+    return embedding_mat, token2id, id2token
 
 
 def seg_length(sentences):
@@ -260,6 +344,7 @@ def seg_length(sentences):
 
 
 def gen_annotation(segs, max_length, filename, labels, data_type):
+    max_length = max_length['full']
     if data_type == 'train':
         eng_length = seg_length(segs[0])
         sim_length = seg_length(segs[1])
@@ -299,10 +384,13 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
     total = 0
     meta = {}
     samples = []
-    fh = open(annotation_file, 'r', encoding='utf8')
+    # fh = open(annotation_file, 'r', encoding='utf8')
     for sentence in tqdm(sentences):
         total += 1
-        token_ids = np.zeros([max_len], dtype=np.int32)
+        tokens = np.zeros([max_len['full']], dtype=np.int32)
+        tokens_pre = np.zeros([max_len['pre']], dtype=np.int32)
+        tokens_alt = np.zeros([max_len['alt']], dtype=np.int32)
+        tokens_cur = np.zeros([max_len['cur']], dtype=np.int32)
 
         def _get_word(word):
             for each in (word, word.lower(), word.capitalize(), word.upper()):
@@ -310,14 +398,26 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
                     return word2id[each]
             return 1
 
-        seq_len = min(len(sentence['tokens']), max_len)
+        seq_len = min(len(sentence['tokens']), max_len['full'])
+        pre_len = min(len(sentence['tokens_pre']), max_len['pre'])
+        alt_len = min(len(sentence['tokens_alt']), max_len['alt'])
+        cur_len = min(len(sentence['tokens_cur']), max_len['cur'])
         for i in range(seq_len):
-            token_ids[i] = _get_word(sentence['tokens'][i])
+            tokens[i] = _get_word(sentence['tokens'][i])
+        for i in range(pre_len):
+            tokens_pre[i] = _get_word(sentence['tokens_pre'][i])
+        for i in range(alt_len):
+            tokens_alt[i] = _get_word(sentence['tokens_alt'][i])
+        for i in range(cur_len):
+            tokens_cur[i] = _get_word(sentence['tokens_cur'][i])
         samples.append({'id': sentence['eid'],
-                        'tokens': token_ids,
+                        'tokens': tokens,
+                        'tokens_pre': tokens_pre,
+                        'tokens_alt': tokens_alt,
+                        'tokens_cur': tokens_cur,
                         'length': seq_len,
                         'cau_label': sentence['cau_label']})
-    fh.close()
+    # fh.close()
     with open(out_file, 'wb') as fo:
         pkl.dump(samples, fo)
     fo.close()
@@ -327,37 +427,42 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
 
 
 def run_prepare(config, flags):
-    train_examples, train_corpus, train_seg, train_labels, max_len = preprocess_train(config.raw_dir,
-                                                                                      config.train_file,
-                                                                                      'train',
-                                                                                      config.build)
-    # valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file, 'valid')
+    transfer_examples = preprocess_transfer(config.raw_dir, config.transfer_file, 'transfer')
+    valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
+                                                                            'valid', config.build)
+    train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
+                                                                             'train', config.build)
     test_examples, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                         'test', config.build)
+
     if config.build:
-        types = ['train', 'test']
-        labels = [train_labels, test_labels]
-        segs = [train_seg, test_seg]
+        types = ['train', 'valid', 'test']
+        labels = [train_labels, valid_labels, test_labels]
+        segs = [train_seg, valid_seg, test_seg]
         for t, s, l in zip(types, segs, labels):
-            save(os.path.join(config.processed_dir, t + '_corpus.txt'), train_corpus, 'corpus')
             gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
+        save(flags.corpus_file, train_corpus, 'corpus')
         corpus_dict = build_dict(flags.corpus_file)
-        token_emb_mat, token2id = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
+        token_emb_mat, token2id, id2token = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
         save(flags.token_emb_file, token_emb_mat, message='embeddings')
-        save(flags.token2id_file, token2id, message='word2index')
+        save(flags.token2id_file, token2id, message='token to index')
+        save(flags.id2token_file, id2token, message='index to token')
     else:
         with open(flags.token2id_file, 'r') as fh:
             token2id = json.load(fh)
+
+    transfer_meta = build_features(transfer_examples, 'transfer', config.max_len, flags.transfer_record_file, token2id)
+    save(flags.transfer_meta, transfer_meta, message='transfer meta')
+    del transfer_examples
 
     train_meta = build_features(train_examples, 'train', config.max_len, flags.train_record_file, token2id,
                                 flags.train_annotation)
     save(flags.train_meta, train_meta, message='train meta')
     del train_examples, train_corpus
 
-    # valid_meta = build_features(valid_examples, 'valid', 200, flags.valid_record_file, token2id)
-    # save(flags.valid_eval_file, valid_evals, message='valid eval')
-    # save(flags.valid_meta, valid_meta, message='valid_meta')
-    # del valid_examples, valid_evals, valid_corpus
+    valid_meta = build_features(valid_examples, 'valid', config.max_len, flags.valid_record_file, token2id)
+    save(flags.valid_meta, valid_meta, message='valid meta')
+    del valid_examples, valid_corpus
 
     test_meta = build_features(test_examples, 'test', config.max_len, flags.test_record_file, token2id,
                                flags.test_annotation)

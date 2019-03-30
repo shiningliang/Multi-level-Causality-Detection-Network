@@ -7,7 +7,7 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from torch_preprocess_1 import run_prepare
+from torch_preprocess import run_prepare
 from models.torch_SCRN import SCRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
@@ -70,7 +70,7 @@ def parse_args():
     model_settings = parser.add_argument_group('model settings')
     model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
                                 help='max length of sequence')
-    model_settings.add_argument('--w2v_type', type=str, default='glove6B',
+    model_settings.add_argument('--w2v_type', type=str, default='wiki',
                                 help='type of the embeddings')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -118,6 +118,8 @@ def parse_args():
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_test.tsv',
                                help='the test file name')
+    path_settings.add_argument('--transfer_file', default='2007_full_filtered.csv',
+                               help='the transfer file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
     path_settings.add_argument('--processed_dir', default='data/processed_data/torch',
@@ -351,10 +353,12 @@ def run():
             self.train_record_file = os.path.join(args.processed_dir, 'train.pkl')
             self.valid_record_file = os.path.join(args.processed_dir, 'valid.pkl')
             self.test_record_file = os.path.join(args.processed_dir, 'test.pkl')
+            self.transfer_record_file = os.path.join(args.processed_dir, 'transfer.pkl')
             # 计数文件
             self.train_meta = os.path.join(args.processed_dir, 'train_meta.json')
             self.valid_meta = os.path.join(args.processed_dir, 'valid_meta.json')
             self.test_meta = os.path.join(args.processed_dir, 'test_meta.json')
+            self.transfer_meta = os.path.join(args.processed_dir, 'transfer_meta.json')
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
             self.train_annotation = os.path.join(args.processed_dir, 'train_annotations.txt')

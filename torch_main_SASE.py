@@ -7,7 +7,7 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from torch_preprocess_1 import run_prepare
+from torch_preprocess import run_prepare
 from models.torch_SelfAttentive import SelfAttentive
 from torch_util_SASE import get_batch, evaluate_batch, FocalLoss
 
