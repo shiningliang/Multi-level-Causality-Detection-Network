@@ -108,17 +108,17 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='bootstrapped',
+    path_settings.add_argument('--task', default='training',
                                help='the task name')
     path_settings.add_argument('--model', default='MCIN',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_test.tsv',
                                help='the test file name')
-    path_settings.add_argument('--transfer_file', default='2007_full_filtered.csv',
+    path_settings.add_argument('--transfer_file', default='2010_random_filtered.json',
                                help='the transfer file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
@@ -284,9 +284,11 @@ def train(args, file_paths):
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
             ROC = {'FPR': fpr, 'TPR': tpr}
             PRC = {'PRECISION': precision, 'RECALL': recall}
-            if args.model == 'MCIN' or args.model == 'TB':
-                draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-                         args.pics_dir, args.n_block, args.n_head, logger)
+            torch.save(model, os.path.join(args.model_dir, 'model.pth'))
+
+            # if args.model == 'MCIN' or args.model == 'TB':
+            #     draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+            #              args.pics_dir, args.n_block, args.n_head, logger)
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)

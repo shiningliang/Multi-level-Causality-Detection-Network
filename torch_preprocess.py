@@ -70,6 +70,19 @@ def seg_length(sentences):
     return seg_len
 
 
+def check_null(sen):
+    if len(sen) == 3:
+        pre = sen[0] if len(sen[0]) > 0 else ['<NULL>']
+        mid = sen[1] if len(sen[1]) > 0 else ['<NULL>']
+        cur = sen[2] if len(sen[2]) > 0 else ['<NULL>']
+    else:
+        pre = sen[0] if len(sen[0]) > 0 else ['<NULL>']
+        mid = ['<NULL>']
+        cur = ['<NULL>']
+
+    return pre, mid, cur
+
+
 def preprocess_train(file_path, file_name, data_type, is_build=False):
     print("Generating {} examples...".format(data_type))
     examples = []
@@ -101,22 +114,24 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
         # for idx, seg in enumerate(eng):
         #     if len(seg) == 0:
         #         eng[idx] = ['<OOV>']
+        pre, mid, cur = check_null(eng)
         examples.append({'eid': total,
-                         'tokens': eng[0] + eng[1] + eng[2],
-                         'tokens_pre': eng[0],
-                         'tokens_alt': eng[1],
-                         'tokens_cur': eng[2],
+                         'tokens': pre + mid + cur,
+                         'tokens_pre': pre,
+                         'tokens_alt': mid,
+                         'tokens_cur': cur,
                          'cau_label': label})
 
         total += 1
         # for idx, seg in enumerate(sim):
         #     if len(seg) == 0:
         #         sim[idx] = ['<OOV>']
+        pre, mid, cur = check_null(sim)
         examples.append({'eid': total,
-                         'tokens': sim[0] + sim[1] + sim[2],
-                         'tokens_pre': sim[0],
-                         'tokens_alt': sim[1],
-                         'tokens_cur': sim[2],
+                         'tokens': pre + mid + cur,
+                         'tokens_pre': pre,
+                         'tokens_alt': mid,
+                         'tokens_cur': cur,
                          'cau_label': label})
     if is_build:
         sentences = []
@@ -154,11 +169,12 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     total = 0
     for label, seg in zip(labels, seg_filtered):
         total += 1
+        pre, mid, cur = check_null(seg)
         examples.append({'eid': total,
-                         'tokens': seg[0] + seg[1] + seg[2],
-                         'tokens_pre': seg[0] if len(seg[0]) > 0 else ['<NULL>'],
-                         'tokens_alt': seg[1] if len(seg[1]) > 0 else ['<NULL>'],
-                         'tokens_cur': seg[2] if len(seg[2]) > 0 else ['<NULL>'],
+                         'tokens': pre + mid + cur,
+                         'tokens_pre': pre,
+                         'tokens_alt': mid,
+                         'tokens_cur': cur,
                          'cau_label': label})
     # stat(seq_len)
     # print('Get {} total examples'.format(total))
@@ -176,20 +192,19 @@ def preprocess_transfer(file_path, file_name, data_type, is_build=False):
     examples = []
     data_path = os.path.join(file_path, file_name)
 
-    sem_df = pd.read_csv(data_path, sep=',')
     total = 0
-    for i, row in sem_df.iterrows():
+    with open(data_path, 'rb') as f:
+        data_set = json.load(f)
+    f.close()
+    for label, sample in zip(data_set['label'], data_set['sample']):
         total += 1
-        pre = row['pre'] if len(row['pre']) > 0 else ['<NULL>']
-        mid = row['mid'] if len(row['mid']) > 0 else ['<NULL>']
-        cur = row['cur'] if len(row['cur']) > 0 else ['<NULL>']
-
+        pre, mid, cur = check_null(sample)
         examples.append({'eid': total,
                          'tokens': pre + mid + cur,
                          'tokens_pre': pre,
                          'tokens_alt': mid,
                          'tokens_cur': cur,
-                         'cau_label': row['label']})
+                         'cau_label': label})
     return examples
 
 
@@ -439,8 +454,8 @@ def run_prepare(config, flags):
         types = ['train', 'valid', 'test']
         labels = [train_labels, valid_labels, test_labels]
         segs = [train_seg, valid_seg, test_seg]
-        for t, s, l in zip(types, segs, labels):
-            gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
+        # for t, s, l in zip(types, segs, labels):
+        #     gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
         save(flags.corpus_file, train_corpus, 'corpus')
         corpus_dict = build_dict(flags.corpus_file)
         token_emb_mat, token2id, id2token = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)

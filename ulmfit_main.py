@@ -109,7 +109,7 @@ def parse_args():
                                help='the task name')
     path_settings.add_argument('--model', default='ULMFIT',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
@@ -315,7 +315,7 @@ def run():
     class FilePaths(object):
         def __init__(self):
             # 运行记录文件
-            self.train_file = os.path.join(args.processed_dir, 'train.csv')
+            self.train_file = os.path.join(args.processed_dir, 'train_training.csv')
             self.valid_file = os.path.join(args.processed_dir, 'valid.csv')
             self.test_file = os.path.join(args.processed_dir, 'test.csv')
             # 计数文件
@@ -329,7 +329,7 @@ def run():
             self.test_annotation = os.path.join(args.processed_dir, 'test_annotations.txt')
 
             self.corpus_file = os.path.join(args.processed_dir, 'corpus.txt')
-            self.w2v_file = './data/processed_data/wiki_en_model.pkl'
+            self.w2v_file = './data/processed_data/wiki.en.pkl'
             self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.pkl')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')
 

@@ -17,7 +17,7 @@ def preprocess_train(file_path, file_name, data_type, is_build):
     engs, sims, labels = [], [], []
     seg_engs, seg_sims = [], []
     data_path = os.path.join(file_path, file_name)
-    with open(data_path, 'r', encoding='utf8') as fh:
+    with open(data_path, 'r', encoding='ISO-8859-1') as fh:
         for line in tqdm(fh):
             line = line.strip().split('\t')
             labels += [int(line[0])] * 2
@@ -75,5 +75,6 @@ def run_prepare(config, flags):
     # valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
     #                                                                         'valid')
     df_val = preprocess_test(config.raw_dir, config.test_file, 'test', config.build)
+    print(len(df_trn), len(df_val))
     df_trn.to_csv(flags.train_file, index=False)
     df_val.to_csv(flags.test_file, index=False)
