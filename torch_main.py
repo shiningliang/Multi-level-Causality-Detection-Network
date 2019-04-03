@@ -311,6 +311,71 @@ def train(args, file_paths):
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 
+def evaluate(args, file_paths):
+    logger = logging.getLogger('Causality')
+    logger.info('Loading valid file...')
+    with open(file_paths.valid_record_file, 'rb') as fh:
+        valid_file = pkl.load(fh)
+    fh.close()
+    logger.info('Loading test file...')
+    with open(file_paths.test_record_file, 'rb') as fh:
+        test_file = pkl.load(fh)
+    fh.close()
+    logger.info('Loading valid meta...')
+    with open(file_paths.valid_meta, 'r') as fh:
+        valid_meta = json.load(fh)
+    fh.close()
+    logger.info('Loading test meta...')
+    with open(file_paths.test_meta, 'r') as fh:
+        test_meta = json.load(fh)
+    fh.close()
+    logger.info('Loading id to token file...')
+    with open(file_paths.id2token_file, 'r') as fh:
+        id2token_file = json.load(fh)
+    fh.close()
+    # logger.info('Loading token embeddings...')
+    # with open(file_paths.token_emb_file, 'rb') as fh:
+    #     token_embeddings = pkl.load(fh)
+    # fh.close()
+    valid_num = valid_meta['total']
+    test_num = test_meta['total']
+
+    logger.info('Loading shape meta...')
+    logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
+
+    model = torch.load(os.path.join(args.model_dir, 'model.pth'))
+    model.eval()
+
+    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
+                                                               args.device, args.is_fc, 'eval', logger)
+    logger.info('Eval Loss - {}'.format(eval_metrics['loss']))
+    logger.info('Eval Acc - {}'.format(eval_metrics['acc']))
+    logger.info('Eval Precision - {}'.format(eval_metrics['precision']))
+    logger.info('Eval Recall - {}'.format(eval_metrics['recall']))
+    logger.info('Eval F1 - {}'.format(eval_metrics['f1']))
+    logger.info('Eval AUCROC - {}'.format(eval_metrics['auc_roc']))
+    logger.info('Eval AUCPRC - {}'.format(eval_metrics['auc_prc']))
+
+    if args.model == 'MCIN' or args.model == 'TB':
+        draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+                 args.pics_dir, args.n_block, args.n_head, logger)
+
+    FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
+    ROC = {'FPR': fpr, 'TPR': tpr}
+    PRC = {'PRECISION': precision, 'RECALL': recall}
+
+    with open(os.path.join(args.result_dir, 'FALSE.json'), 'w') as f:
+        f.write(json.dumps(FALSE) + '\n')
+    f.close()
+    with open(os.path.join(args.result_dir, 'ROC.json'), 'w') as f:
+        f.write(json.dumps(ROC) + '\n')
+    f.close()
+    with open(os.path.join(args.result_dir, 'PRC.json'), 'w') as f:
+        f.write(json.dumps(PRC) + '\n')
+    f.close()
+    draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
+
+
 def run():
     """
     Prepares and runs the whole system.
