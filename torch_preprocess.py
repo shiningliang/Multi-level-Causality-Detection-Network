@@ -442,7 +442,8 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
 
 
 def run_prepare(config, flags):
-    transfer_examples = preprocess_transfer(config.raw_dir, config.transfer_file, 'transfer')
+    transfer_examples1 = preprocess_transfer(config.raw_dir, config.transfer_file1, 'transfer')
+    transfer_examples2 = preprocess_transfer(config.raw_dir, config.transfer_file2, 'transfer')
     valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
                                                                             'valid', config.build)
     train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
@@ -466,9 +467,14 @@ def run_prepare(config, flags):
         with open(flags.token2id_file, 'r') as fh:
             token2id = json.load(fh)
 
-    transfer_meta = build_features(transfer_examples, 'transfer', config.max_len, flags.transfer_record_file, token2id)
-    save(flags.transfer_meta, transfer_meta, message='transfer meta')
-    del transfer_examples
+    transfer_meta1 = build_features(transfer_examples1, 'transfer', config.max_len, flags.transfer_record_file1,
+                                    token2id)
+    save(flags.transfer_meta1, transfer_meta1, message='transfer meta')
+    del transfer_examples1
+    transfer_meta2 = build_features(transfer_examples2, 'transfer', config.max_len, flags.transfer_record_file2,
+                                    token2id)
+    save(flags.transfer_meta2, transfer_meta2, message='transfer meta')
+    del transfer_examples2
 
     train_meta = build_features(train_examples, 'train', config.max_len, flags.train_record_file, token2id,
                                 flags.train_annotation)

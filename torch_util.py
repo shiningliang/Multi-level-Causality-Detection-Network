@@ -121,7 +121,7 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
     (precisions, recalls, _) = precision_recall_curve(causality_labels, causality_scores)
     metrics['auc_roc'] = auc(fpr, tpr)
     metrics['auc_prc'] = auc(recalls, precisions)
-    if data_type == 'valid':
+    if data_type == 'valid' or data_type == 'eval':
         metrics['fp'] = fp
         metrics['fn'] = fn
     logger.info('Full confusion matrix')

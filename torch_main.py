@@ -108,17 +108,19 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='training',
+    path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
     path_settings.add_argument('--model', default='MCIN',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_test.tsv',
                                help='the test file name')
-    path_settings.add_argument('--transfer_file', default='2010_random_filtered.json',
+    path_settings.add_argument('--transfer_file1', default='2010_random_filtered.json',
+                               help='the transfer file name')
+    path_settings.add_argument('--transfer_file2', default='2010_full_filtered.json',
                                help='the transfer file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
@@ -314,7 +316,7 @@ def train(args, file_paths):
 def evaluate(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading valid file...')
-    with open(file_paths.valid_record_file, 'rb') as fh:
+    with open(file_paths.transfer_record_file1, 'rb') as fh:
         valid_file = pkl.load(fh)
     fh.close()
     logger.info('Loading test file...')
@@ -322,7 +324,7 @@ def evaluate(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
-    with open(file_paths.valid_meta, 'r') as fh:
+    with open(file_paths.transfer_meta1, 'r') as fh:
         valid_meta = json.load(fh)
     fh.close()
     logger.info('Loading test meta...')
@@ -344,7 +346,7 @@ def evaluate(args, file_paths):
     logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
 
     model = torch.load(os.path.join(args.model_dir, 'model.pth'))
-    model.eval()
+    # model.eval()
 
     eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
                                                                args.device, args.is_fc, 'eval', logger)
@@ -420,12 +422,14 @@ def run():
             self.train_record_file = os.path.join(args.processed_dir, 'train.pkl')
             self.valid_record_file = os.path.join(args.processed_dir, 'valid.pkl')
             self.test_record_file = os.path.join(args.processed_dir, 'test.pkl')
-            self.transfer_record_file = os.path.join(args.processed_dir, 'transfer.pkl')
+            self.transfer_record_file1 = os.path.join(args.processed_dir, 'transfer1.pkl')
+            self.transfer_record_file2 = os.path.join(args.processed_dir, 'transfer2.pkl')
             # 计数文件
             self.train_meta = os.path.join(args.processed_dir, 'train_meta.json')
             self.valid_meta = os.path.join(args.processed_dir, 'valid_meta.json')
             self.test_meta = os.path.join(args.processed_dir, 'test_meta.json')
-            self.transfer_meta = os.path.join(args.processed_dir, 'transfer_meta.json')
+            self.transfer_meta1 = os.path.join(args.processed_dir, 'transfer_meta1.json')
+            self.transfer_meta2 = os.path.join(args.processed_dir, 'transfer_meta2.json')
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
             self.train_annotation = os.path.join(args.processed_dir, 'train_annotations.txt')
@@ -455,6 +459,8 @@ def run():
         # fh.close()
     if args.train:
         train(args, file_paths)
+    elif args.evaluate:
+        evaluate(args, file_paths)
 
 
 if __name__ == '__main__':
