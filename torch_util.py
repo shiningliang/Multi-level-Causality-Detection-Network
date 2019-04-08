@@ -105,7 +105,7 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
         causality_preds += cau_preds.tolist()
         causality_scores += cau_scores.tolist()
         causality_labels += cau_labels.tolist()
-        if data_type == 'valid':
+        if data_type == 'valid' or data_type == 'eval':
             for pred, label, eid in zip(cau_preds, cau_labels, eids):
                 if label == 1 and pred == 0:
                     fn.append(eid)

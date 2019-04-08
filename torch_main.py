@@ -108,11 +108,11 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='bootstrapped',
+    path_settings.add_argument('--task', default='training',
                                help='the task name')
-    path_settings.add_argument('--model', default='MCIN',
+    path_settings.add_argument('--model', default='TB',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
@@ -199,9 +199,9 @@ def train(args, file_paths):
         valid_file = pkl.load(fh)
     fh.close()
     logger.info('Loading test file...')
-    with open(file_paths.test_record_file, 'rb') as fh:
-        test_file = pkl.load(fh)
-    fh.close()
+    # with open(file_paths.test_record_file, 'rb') as fh:
+    #     test_file = pkl.load(fh)
+    # fh.close()
     logger.info('Loading train meta...')
     with open(file_paths.train_meta, 'r') as fh:
         train_meta = json.load(fh)
@@ -210,24 +210,24 @@ def train(args, file_paths):
     with open(file_paths.valid_meta, 'r') as fh:
         valid_meta = json.load(fh)
     fh.close()
-    logger.info('Loading test meta...')
-    with open(file_paths.test_meta, 'r') as fh:
-        test_meta = json.load(fh)
-    fh.close()
-    logger.info('Loading id to token file...')
-    with open(file_paths.id2token_file, 'r') as fh:
-        id2token_file = json.load(fh)
-    fh.close()
+    # logger.info('Loading test meta...')
+    # with open(file_paths.test_meta, 'r') as fh:
+    #     test_meta = json.load(fh)
+    # fh.close()
+    # logger.info('Loading id to token file...')
+    # with open(file_paths.id2token_file, 'r') as fh:
+    #     id2token_file = json.load(fh)
+    # fh.close()
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
         token_embeddings = pkl.load(fh)
     fh.close()
     train_num = train_meta['total']
     valid_num = valid_meta['total']
-    test_num = test_meta['total']
+    # test_num = test_meta['total']
 
     logger.info('Loading shape meta...')
-    logger.info('Num train data {} valid data {} test data {}'.format(train_num, valid_num, test_num))
+    logger.info('Num train data {} valid data {}'.format(train_num, valid_num))
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
@@ -236,18 +236,18 @@ def train(args, file_paths):
     #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                 dropout, logger).to(device=args.device)
+    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #              dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
     # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
     #                     dropout, logger).to(device=args.device)
     # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
     #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
-    # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
+    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+                 dropout, logger).to(device=args.device)
     # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
     #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #            dropout, logger).to(device=args.device)
@@ -286,11 +286,8 @@ def train(args, file_paths):
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
             ROC = {'FPR': fpr, 'TPR': tpr}
             PRC = {'PRECISION': precision, 'RECALL': recall}
-            torch.save(model, os.path.join(args.model_dir, 'model.pth'))
-
-            # if args.model == 'MCIN' or args.model == 'TB':
-            #     draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-            #              args.pics_dir, args.n_block, args.n_head, logger)
+            # torch.save(model, os.path.join(args.model_dir, 'model.pth'))
+            torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.bin'))
 
         scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
@@ -316,7 +313,7 @@ def train(args, file_paths):
 def evaluate(args, file_paths):
     logger = logging.getLogger('Causality')
     logger.info('Loading valid file...')
-    with open(file_paths.transfer_record_file1, 'rb') as fh:
+    with open(file_paths.valid_record_file, 'rb') as fh:
         valid_file = pkl.load(fh)
     fh.close()
     logger.info('Loading test file...')
@@ -324,7 +321,7 @@ def evaluate(args, file_paths):
         test_file = pkl.load(fh)
     fh.close()
     logger.info('Loading valid meta...')
-    with open(file_paths.transfer_meta1, 'r') as fh:
+    with open(file_paths.valid_meta, 'r') as fh:
         valid_meta = json.load(fh)
     fh.close()
     logger.info('Loading test meta...')
@@ -335,18 +332,28 @@ def evaluate(args, file_paths):
     with open(file_paths.id2token_file, 'r') as fh:
         id2token_file = json.load(fh)
     fh.close()
-    # logger.info('Loading token embeddings...')
-    # with open(file_paths.token_emb_file, 'rb') as fh:
-    #     token_embeddings = pkl.load(fh)
-    # fh.close()
+    logger.info('Loading token embeddings...')
+    with open(file_paths.token_emb_file, 'rb') as fh:
+        token_embeddings = pkl.load(fh)
+    fh.close()
     valid_num = valid_meta['total']
     test_num = test_meta['total']
 
     logger.info('Loading shape meta...')
     logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
 
-    model = torch.load(os.path.join(args.model_dir, 'model.pth'))
-    # model.eval()
+    # model = torch.load(os.path.join(args.model_dir, 'model.pth'))
+    dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #              dropout, logger).to(device=args.device)
+    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+                 dropout, logger).to(device=args.device)
+    # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #            dropout, logger).to(device=args.device)
+    model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
 
     eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
                                                                args.device, args.is_fc, 'eval', logger)
@@ -459,7 +466,7 @@ def run():
         # fh.close()
     if args.train:
         train(args, file_paths)
-    elif args.evaluate:
+    if args.evaluate:
         evaluate(args, file_paths)
 
 

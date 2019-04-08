@@ -71,7 +71,23 @@ def seg_length(sentences):
 
 
 def check_null(sen):
+    flag = False
     if len(sen) == 3:
+        # if len(sen[0]) > 0:
+        #     pre = sen[0]
+        # else:
+        #     pre = ['<NULL>']
+        #     flag = True
+        # if len(sen[1]) > 0:
+        #     mid = sen[1]
+        # else:
+        #     mid = ['<NULL>']
+        #     flag = True
+        # if len(sen[2]) > 0:
+        #     cur = sen[2]
+        # else:
+        #     cur = ['<NULL>']
+        #     flag = True
         pre = sen[0] if len(sen[0]) > 0 else ['<NULL>']
         mid = sen[1] if len(sen[1]) > 0 else ['<NULL>']
         cur = sen[2] if len(sen[2]) > 0 else ['<NULL>']
@@ -79,8 +95,9 @@ def check_null(sen):
         pre = sen[0] if len(sen[0]) > 0 else ['<NULL>']
         mid = ['<NULL>']
         cur = ['<NULL>']
+        flag = True
 
-    return pre, mid, cur
+    return pre, mid, cur, flag
 
 
 def preprocess_train(file_path, file_name, data_type, is_build=False):
@@ -94,15 +111,17 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
         line = line.strip().split('\t')
         labels.append(int(line[0]))
         del line[0]
-        engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
-        sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
+        if is_build:
+            engs.append(word_tokenize(SPACE.join(line[:3]).strip()))
+            sims.append(word_tokenize(SPACE.join(line[3:]).strip()))
         seg_engs.append([word_tokenize(seg) for seg in line[:3]])
         seg_sims.append([word_tokenize(seg) for seg in line[3:]])
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
-    eng_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in engs]
-    sim_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in sims]
+    if is_build:
+        eng_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in engs]
+        sim_filtered = [[word.lower() for word in document if word not in english_punctuations] for document in sims]
     seg_eng_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng
                         in seg_engs]
     seg_sim_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sim] for sim
@@ -114,25 +133,42 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
         # for idx, seg in enumerate(eng):
         #     if len(seg) == 0:
         #         eng[idx] = ['<OOV>']
-        pre, mid, cur = check_null(eng)
+        pre, mid, cur, flag = check_null(eng)
+        if flag:
+            print(total)
         examples.append({'eid': total,
                          'tokens': pre + mid + cur,
                          'tokens_pre': pre,
                          'tokens_alt': mid,
                          'tokens_cur': cur,
                          'cau_label': label})
+        # examples.append({'eid': total,
+        #                  'tokens': eng[0] + eng[1] + eng[2],
+        #                  'tokens_pre': eng[0],
+        #                  'tokens_alt': eng[1],
+        #                  'tokens_cur': eng[2],
+        #                  'cau_label': label})
 
         total += 1
         # for idx, seg in enumerate(sim):
         #     if len(seg) == 0:
         #         sim[idx] = ['<OOV>']
-        pre, mid, cur = check_null(sim)
+        pre, mid, cur, flag = check_null(sim)
+        if flag:
+            print(total)
         examples.append({'eid': total,
                          'tokens': pre + mid + cur,
                          'tokens_pre': pre,
                          'tokens_alt': mid,
                          'tokens_cur': cur,
                          'cau_label': label})
+        # examples.append({'eid': total,
+        #                  'tokens': sim[0] + sim[1] + sim[2],
+        #                  'tokens_pre': sim[0],
+        #                  'tokens_alt': sim[1],
+        #                  'tokens_cur': sim[2],
+        #                  'cau_label': label})
+
     if is_build:
         sentences = []
         for eng_tokens, sim_tokens in zip(eng_filtered, sim_filtered):
@@ -163,13 +199,17 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
 
     english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
                             '"', '``', '-', '\'\'']
-    sen_filtered = [[word.lower() for word in sentence if word not in english_punctuations] for sentence in sentences]
+    if is_build:
+        sen_filtered = [[word.lower() for word in sentence if word not in english_punctuations] for sentence in
+                        sentences]
     seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in
                     segments]
     total = 0
     for label, seg in zip(labels, seg_filtered):
         total += 1
-        pre, mid, cur = check_null(seg)
+        pre, mid, cur, flag = check_null(seg)
+        if flag:
+            print(total)
         examples.append({'eid': total,
                          'tokens': pre + mid + cur,
                          'tokens_pre': pre,
@@ -198,7 +238,9 @@ def preprocess_transfer(file_path, file_name, data_type, is_build=False):
     f.close()
     for label, sample in zip(data_set['label'], data_set['sample']):
         total += 1
-        pre, mid, cur = check_null(sample)
+        pre, mid, cur, flag = check_null(sample)
+        if flag:
+            print(total)
         examples.append({'eid': total,
                          'tokens': pre + mid + cur,
                          'tokens_pre': pre,
@@ -442,12 +484,12 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
 
 
 def run_prepare(config, flags):
+    train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
+                                                                             'train', config.build)
     transfer_examples1 = preprocess_transfer(config.raw_dir, config.transfer_file1, 'transfer')
     transfer_examples2 = preprocess_transfer(config.raw_dir, config.transfer_file2, 'transfer')
     valid_examples, valid_corpus, valid_seg, valid_labels = preprocess_test(config.raw_dir, config.valid_file,
                                                                             'valid', config.build)
-    train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
-                                                                             'train', config.build)
     test_examples, test_corpus, test_seg, test_labels = preprocess_test(config.raw_dir, config.test_file,
                                                                         'test', config.build)
 
