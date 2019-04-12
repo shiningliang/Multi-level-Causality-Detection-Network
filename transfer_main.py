@@ -7,14 +7,11 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from torch_preprocess import run_prepare
+from transfer_preprocess import run_prepare
 from models.torch_SCRN import SCRN
-from models.torch_TextCNN import TextCNN
-from models.torch_TextRNN import TextRNN
 from models.torch_MCIN import MCIN
 from models.torch_TransBlocks import TB
-from models.torch_DPCNN import TextCNNDeep
-from torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
+from torch_util import get_batch, evaluate_batch, FocalLoss, draw_curve
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -70,7 +67,7 @@ def parse_args():
     model_settings = parser.add_argument_group('model settings')
     model_settings.add_argument('--max_len', type=dict, default={'full': 128, 'pre': 64, 'alt': 8, 'cur': 64},
                                 help='max length of sequence')
-    model_settings.add_argument('--w2v_type', type=str, default='wiki',
+    model_settings.add_argument('--w2v_type', type=str, default='glove6',
                                 help='type of the embeddings')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -108,20 +105,16 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='training',
+    path_settings.add_argument('--task', default='transfer',
                                help='the task name')
-    path_settings.add_argument('--model', default='TB',
+    path_settings.add_argument('--model', default='MCIN',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train.tsv',
+    path_settings.add_argument('--train_file', default='2010_train.json',
                                help='the train file name')
-    path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
+    path_settings.add_argument('--valid_file', default='2010_test.json',
                                help='the valid file name')
-    path_settings.add_argument('--test_file', default='altlex_test.tsv',
+    path_settings.add_argument('--test_file', default='2010_test.json',
                                help='the test file name')
-    path_settings.add_argument('--transfer_file1', default='2010_random_filtered.json',
-                               help='the transfer file name')
-    path_settings.add_argument('--transfer_file2', default='2010_full_filtered.json',
-                               help='the transfer file name')
     path_settings.add_argument('--raw_dir', default='data/raw_data/',
                                help='the dir to store raw data')
     path_settings.add_argument('--processed_dir', default='data/processed_data/torch',
@@ -145,7 +138,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     model.train()
     train_loss = []
     n_batch_loss = 0
-    weight = torch.from_numpy(np.array([0.2, 0.8], dtype=np.float32)).to(args.device)
+    # weight = torch.from_numpy(np.array([0.5, 0.5], dtype=np.float32)).to(args.device)
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
@@ -160,7 +153,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
         if args.is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
         else:
-            criterion = torch.nn.CrossEntropyLoss(weight)
+            criterion = torch.nn.CrossEntropyLoss()
         loss = criterion(outputs, cau_labels)
         # params = model.state_dict()
         # l2_reg = torch.autograd.Variable(torch.FloatTensor(1), requires_grad=True).cuda()
@@ -189,7 +182,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 
 
 def train(args, file_paths):
-    logger = logging.getLogger('Causality')
+    logger = logging.getLogger('2010')
     logger.info('Loading train file...')
     with open(file_paths.train_record_file, 'rb') as fh:
         train_file = pkl.load(fh)
@@ -198,10 +191,6 @@ def train(args, file_paths):
     with open(file_paths.valid_record_file, 'rb') as fh:
         valid_file = pkl.load(fh)
     fh.close()
-    # logger.info('Loading test file...')
-    # with open(file_paths.test_record_file, 'rb') as fh:
-    #     test_file = pkl.load(fh)
-    # fh.close()
     logger.info('Loading train meta...')
     with open(file_paths.train_meta, 'r') as fh:
         train_meta = json.load(fh)
@@ -210,52 +199,31 @@ def train(args, file_paths):
     with open(file_paths.valid_meta, 'r') as fh:
         valid_meta = json.load(fh)
     fh.close()
-    # logger.info('Loading test meta...')
-    # with open(file_paths.test_meta, 'r') as fh:
-    #     test_meta = json.load(fh)
-    # fh.close()
-    # logger.info('Loading id to token file...')
-    # with open(file_paths.id2token_file, 'r') as fh:
-    #     id2token_file = json.load(fh)
-    # fh.close()
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
         token_embeddings = pkl.load(fh)
     fh.close()
     train_num = train_meta['total']
     valid_num = valid_meta['total']
-    # test_num = test_meta['total']
 
     logger.info('Loading shape meta...')
     logger.info('Num train data {} valid data {}'.format(train_num, valid_num))
 
     dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
-    # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
-    #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
-    #     device=args.device)
-    # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
-    #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
-    # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
-    #                 args.is_sinusoid, dropout, logger).to(device=args.device)
-    # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
-    #                     dropout, logger).to(device=args.device)
-    # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
-    #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
-    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+
+    model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
                  args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
                  dropout, logger).to(device=args.device)
+    # model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
+    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
+    #              dropout, logger).to(device=args.device)
     # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
     #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
     #            dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
-    # torch.backends.cudnn.benchmark = True
     max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
     FALSE = {}
     ROC = {}
@@ -298,88 +266,13 @@ def train(args, file_paths):
     logger.info('Max F1 - {}'.format(max_f))
     logger.info('Max Epoch - {}'.format(max_epoch))
     logger.info('Max Sum - {}'.format(max_sum))
-    with open(os.path.join(args.result_dir, 'FALSE_valid.json'), 'w') as f:
+    with open(os.path.join(args.result_dir, 'FALSE.json'), 'w') as f:
         f.write(json.dumps(FALSE) + '\n')
     f.close()
-    with open(os.path.join(args.result_dir, 'ROC_valid.json'), 'w') as f:
+    with open(os.path.join(args.result_dir, 'ROC.json'), 'w') as f:
         f.write(json.dumps(ROC) + '\n')
     f.close()
-    with open(os.path.join(args.result_dir, 'PRC_valid.json'), 'w') as f:
-        f.write(json.dumps(PRC) + '\n')
-    f.close()
-    draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
-
-
-def evaluate(args, file_paths):
-    logger = logging.getLogger('Causality')
-    logger.info('Loading valid file...')
-    with open(file_paths.valid_record_file, 'rb') as fh:
-        valid_file = pkl.load(fh)
-    fh.close()
-    logger.info('Loading test file...')
-    with open(file_paths.test_record_file, 'rb') as fh:
-        test_file = pkl.load(fh)
-    fh.close()
-    logger.info('Loading valid meta...')
-    with open(file_paths.valid_meta, 'r') as fh:
-        valid_meta = json.load(fh)
-    fh.close()
-    logger.info('Loading test meta...')
-    with open(file_paths.test_meta, 'r') as fh:
-        test_meta = json.load(fh)
-    fh.close()
-    logger.info('Loading id to token file...')
-    with open(file_paths.id2token_file, 'r') as fh:
-        id2token_file = json.load(fh)
-    fh.close()
-    logger.info('Loading token embeddings...')
-    with open(file_paths.token_emb_file, 'rb') as fh:
-        token_embeddings = pkl.load(fh)
-    fh.close()
-    valid_num = valid_meta['total']
-    test_num = test_meta['total']
-
-    logger.info('Loading shape meta...')
-    logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
-
-    # model = torch.load(os.path.join(args.model_dir, 'model.pth'))
-    dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
-    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
-    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                 dropout, logger).to(device=args.device)
-    # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #            dropout, logger).to(device=args.device)
-    model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
-
-    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
-                                                               args.device, args.is_fc, 'eval', logger)
-    logger.info('Eval Loss - {}'.format(eval_metrics['loss']))
-    logger.info('Eval Acc - {}'.format(eval_metrics['acc']))
-    logger.info('Eval Precision - {}'.format(eval_metrics['precision']))
-    logger.info('Eval Recall - {}'.format(eval_metrics['recall']))
-    logger.info('Eval F1 - {}'.format(eval_metrics['f1']))
-    logger.info('Eval AUCROC - {}'.format(eval_metrics['auc_roc']))
-    logger.info('Eval AUCPRC - {}'.format(eval_metrics['auc_prc']))
-
-    if args.model == 'MCIN' or args.model == 'TB':
-        draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-                 args.pics_dir, args.n_block, args.n_head, logger)
-
-    FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
-    ROC = {'FPR': fpr, 'TPR': tpr}
-    PRC = {'PRECISION': precision, 'RECALL': recall}
-
-    with open(os.path.join(args.result_dir, 'FALSE_transfer.json'), 'w') as f:
-        f.write(json.dumps(FALSE) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'ROC_transfer.json'), 'w') as f:
-        f.write(json.dumps(ROC) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'PRC_transfer.json'), 'w') as f:
+    with open(os.path.join(args.result_dir, 'PRC.json'), 'w') as f:
         f.write(json.dumps(PRC) + '\n')
     f.close()
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
@@ -390,7 +283,7 @@ def run():
     Prepares and runs the whole system.
     """
     args = parse_args()
-    logger = logging.getLogger('Causality')
+    logger = logging.getLogger('2010')
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     # 是否存储日志
@@ -429,14 +322,11 @@ def run():
             self.train_record_file = os.path.join(args.processed_dir, 'train.pkl')
             self.valid_record_file = os.path.join(args.processed_dir, 'valid.pkl')
             self.test_record_file = os.path.join(args.processed_dir, 'test.pkl')
-            self.transfer_record_file1 = os.path.join(args.processed_dir, 'transfer1.pkl')
-            self.transfer_record_file2 = os.path.join(args.processed_dir, 'transfer2.pkl')
+
             # 计数文件
             self.train_meta = os.path.join(args.processed_dir, 'train_meta.json')
             self.valid_meta = os.path.join(args.processed_dir, 'valid_meta.json')
             self.test_meta = os.path.join(args.processed_dir, 'test_meta.json')
-            self.transfer_meta1 = os.path.join(args.processed_dir, 'transfer_meta1.json')
-            self.transfer_meta2 = os.path.join(args.processed_dir, 'transfer_meta2.json')
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
             self.train_annotation = os.path.join(args.processed_dir, 'train_annotations.txt')
@@ -466,8 +356,6 @@ def run():
         # fh.close()
     if args.train:
         train(args, file_paths)
-    if args.evaluate:
-        evaluate(args, file_paths)
 
 
 if __name__ == '__main__':
