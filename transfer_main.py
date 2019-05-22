@@ -7,11 +7,9 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from transfer_preprocess import run_prepare
-from models.torch_SCRN import SCRN
+from preprocess.transfer_preprocess import run_prepare
 from models.torch_MCIN import MCIN
-from models.torch_TransBlocks import TB
-from torch_util import get_batch, evaluate_batch, FocalLoss, draw_curve
+from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_curve
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 

@@ -7,14 +7,13 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
-from torch_preprocess import run_prepare
+from preprocess.torch_preprocess import run_prepare
 from models.torch_SCRN import SCRN
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
 from models.torch_MCIN import MCIN
 from models.torch_TransBlocks import TB
-from models.torch_DPCNN import TextCNNDeep
-from torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
+from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 

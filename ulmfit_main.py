@@ -1,19 +1,11 @@
-import os
 import argparse
 import logging
-import random
 import ujson as json
-import pickle as pkl
-import numpy as np
-import pandas as pd
-import fastai
-from fastai import *
 from fastai.text import *
 import torch
-import torch.optim as optim
-from ulmfit_preprocess import run_prepare
-from torch_util import get_batch, evaluate_batch, FocalLoss
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from preprocess.ulmfit_preprocess import run_prepare
+from utils.torch_util import get_batch, FocalLoss
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 

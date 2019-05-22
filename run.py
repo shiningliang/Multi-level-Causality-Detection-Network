@@ -5,10 +5,8 @@ import ujson as json
 import numpy as np
 import tensorflow as tf
 from preprocess import run_prepare
-from models.BiLSTM import BasicBiLSTM
-from models.CNN import BasicCNN
 from models.SelfAttentiveSentenceEmbedding import SelfAttentive
-from util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
+from utils.tf_util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
 import warnings
 
 warnings.filterwarnings(action='ignore', category=UserWarning, module='tensorflow')
