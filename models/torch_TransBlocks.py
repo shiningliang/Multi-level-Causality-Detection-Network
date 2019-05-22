@@ -5,30 +5,26 @@ from time import time
 
 
 class TB(nn.Module):
-    def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_kernels, n_filter,
-                 n_block, n_head, is_sinusoid, is_ffn, dropout, logger, is_test=None):
+    def __init__(self, token_embeddings, args, logger):
         super(TB, self).__init__()
         start_t = time()
         n_dict, n_emb = token_embeddings.shape
-        self.sinusoid = is_sinusoid
-        self.gru_hidden = n_hidden
-        self.att_hidden = n_emb
-        self.crn_hidden = 4 * n_hidden
-        self.max_len = max_len['full']
-        self.n_block = n_block
-        self.is_ffn = is_ffn
-        self.n_layer = n_layer
-        self.n_filter = n_filter
-        self.is_test = is_test
+        self.att_hidden = args.n_emb
+        self.gru_hidden = args.n_hidden
+        self.crn_hidden = 4 * args.n_hidden
+        self.max_len = args.max_len['full']
+        self.n_block = args.n_block
+        self.n_head = args.n_head
+        self.is_sinusoid = args.is_sinusoid
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
         self.pos_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
-        self.emb_dropout = nn.Dropout(dropout['emb'])
-        self.transformer = Encoder(n_head, n_block, n_emb, dropout['layer'])
+        self.emb_dropout = nn.Dropout(args.dropout['emb'])
+        self.transformer = Encoder(self.n_head, self.n_block, n_emb, args.dropout['layer'])
 
         self.out_fc = nn.Sequential(nn.Linear(self.max_len * self.att_hidden, self.att_hidden),
                                     nn.ReLU(),
-                                    nn.Dropout(dropout['layer']),
-                                    nn.Linear(self.att_hidden, output_size))
+                                    nn.Dropout(args.dropout['layer']),
+                                    nn.Linear(self.att_hidden, args.n_class))
 
         self._init_weights(token_embeddings)
         logger.info('Time to build graph: {} s'.format(time() - start_t))

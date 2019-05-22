@@ -8,11 +8,11 @@ import numpy as np
 import torch
 import torch.optim as optim
 from preprocess.torch_preprocess import run_prepare
-from models.torch_SCRN import SCRN
+import models
+
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
-from models.torch_MCIN import MCIN
-from models.torch_TransBlocks import TB
+
 from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
@@ -109,7 +109,7 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='training',
                                help='the task name')
-    path_settings.add_argument('--model', default='TB',
+    path_settings.add_argument('--model', default='SCRN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
@@ -197,59 +197,34 @@ def train(args, file_paths):
     with open(file_paths.valid_record_file, 'rb') as fh:
         valid_file = pkl.load(fh)
     fh.close()
-    # logger.info('Loading test file...')
-    # with open(file_paths.test_record_file, 'rb') as fh:
-    #     test_file = pkl.load(fh)
-    # fh.close()
     logger.info('Loading train meta...')
-    with open(file_paths.train_meta, 'r') as fh:
-        train_meta = json.load(fh)
-    fh.close()
+    train_meta = load_json(file_paths.train_meta)
     logger.info('Loading valid meta...')
-    with open(file_paths.valid_meta, 'r') as fh:
-        valid_meta = json.load(fh)
-    fh.close()
-    # logger.info('Loading test meta...')
-    # with open(file_paths.test_meta, 'r') as fh:
-    #     test_meta = json.load(fh)
-    # fh.close()
-    # logger.info('Loading id to token file...')
-    # with open(file_paths.id2token_file, 'r') as fh:
-    #     id2token_file = json.load(fh)
-    # fh.close()
+    valid_meta = load_json(file_paths.valid_meta)
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
         token_embeddings = pkl.load(fh)
     fh.close()
     train_num = train_meta['total']
     valid_num = valid_meta['total']
-    # test_num = test_meta['total']
 
     logger.info('Loading shape meta...')
     logger.info('Num train data {} valid data {}'.format(train_num, valid_num))
 
-    dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
+    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, dropout, logger).to(device=args.device)
     # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
     #                     dropout, logger).to(device=args.device)
     # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
     #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
-    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                 dropout, logger).to(device=args.device)
-    # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #            dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
@@ -297,15 +272,10 @@ def train(args, file_paths):
     logger.info('Max F1 - {}'.format(max_f))
     logger.info('Max Epoch - {}'.format(max_epoch))
     logger.info('Max Sum - {}'.format(max_sum))
-    with open(os.path.join(args.result_dir, 'FALSE_valid.json'), 'w') as f:
-        f.write(json.dumps(FALSE) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'ROC_valid.json'), 'w') as f:
-        f.write(json.dumps(ROC) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'PRC_valid.json'), 'w') as f:
-        f.write(json.dumps(PRC) + '\n')
-    f.close()
+
+    dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
+    dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
+    dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 
@@ -342,16 +312,8 @@ def evaluate(args, file_paths):
     logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
 
     # model = torch.load(os.path.join(args.model_dir, 'model.pth'))
-    dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
-    # model = MCIN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #              args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #              dropout, logger).to(device=args.device)
-    model = SCRN(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-                 args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-                 dropout, logger).to(device=args.device)
-    # model = TB(token_embeddings, args.max_len, args.n_class, args.n_hidden, args.n_layer,
-    #            args.n_kernels, args.n_filter, args.n_block, args.n_head, args.is_sinusoid, args.is_ffn,
-    #            dropout, logger).to(device=args.device)
+    args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
 
     eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
@@ -372,16 +334,23 @@ def evaluate(args, file_paths):
     ROC = {'FPR': fpr, 'TPR': tpr}
     PRC = {'PRECISION': precision, 'RECALL': recall}
 
-    with open(os.path.join(args.result_dir, 'FALSE_transfer.json'), 'w') as f:
-        f.write(json.dumps(FALSE) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'ROC_transfer.json'), 'w') as f:
-        f.write(json.dumps(ROC) + '\n')
-    f.close()
-    with open(os.path.join(args.result_dir, 'PRC_transfer.json'), 'w') as f:
-        f.write(json.dumps(PRC) + '\n')
-    f.close()
+    dump_json(os.path.join(args.result_dir, 'FALSE_transfer.json'), FALSE)
+    dump_json(os.path.join(args.result_dir, 'ROC_transfer.json'), ROC)
+    dump_json(os.path.join(args.result_dir, 'PRC_transfer.json'), PRC)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
+
+
+def dump_json(file_path, obj):
+    with open(file_path, 'w') as f:
+        f.write(json.dumps(obj) + '\n')
+    f.close()
+
+
+def load_json(file_path):
+    with open(file_path, 'r') as f:
+        obj = json.load(f)
+    f.close()
+    return obj
 
 
 def run():

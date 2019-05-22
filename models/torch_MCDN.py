@@ -7,50 +7,50 @@ from sru import SRU
 from time import time
 
 
-class MCIN(nn.Module):
-    def __init__(self, token_embeddings, max_len, output_size, n_hidden, n_layer, n_kernels, n_filter,
-                 n_block, n_head, is_sinusoid, is_ffn, dropout, logger, is_test=None):
-        super(MCIN, self).__init__()
+class MCDN(nn.Module):
+    def __init__(self, token_embeddings, args, logger):
+        super(MCDN, self).__init__()
         start_t = time()
         n_dict, n_emb = token_embeddings.shape
-        self.sinusoid = is_sinusoid
-        self.gru_hidden = n_hidden
+        self.max_len = args.max_len['full']
         self.att_hidden = n_emb
-        self.crn_hidden = 4 * n_hidden
-        self.max_len = max_len['full']
-        self.n_block = n_block
-        self.is_ffn = is_ffn
-        self.n_layer = n_layer
-        self.n_filter = n_filter
-        self.is_test = is_test
+        self.gru_hidden = args.n_hidden
+        self.crn_hidden = 4 * args.n_hidden
+        self.n_block = args.n_block
+        self.n_layer = args.n_layer
+        self.n_filter = args.n_filter
+        self.n_kernels = args.n_kernels
+        self.is_sinusoid = args.is_sinusoid
+        self.is_ffn = args.is_ffn
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
-        if is_sinusoid:
+        if self.is_sinusoid:
             self.pos_embedding = PositionalEncoding(n_emb, max_len=self.max_len)
         #     self.position_embedding = PositionEmbedding(n_emb, zeros_pad=False, scale=False)
         # else:
         #     self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
-        self.emb_dropout = nn.Dropout(dropout['emb'])
-        self.transformer = Encoder(n_head, n_block, n_emb, dropout['layer'])
-        self.seg_encoder = nn.GRU(n_emb, n_hidden, n_layer, dropout=dropout['layer'], batch_first=True, bidirectional=True)
+        self.emb_dropout = nn.Dropout(args.dropout['emb'])
+        self.transformer = Encoder(self.n_head, self.n_block, n_emb, args.dropout['layer'])
+        self.seg_encoder = nn.GRU(n_emb, self.n_hidden, self.n_layer, dropout=args.dropout['layer'], batch_first=True,
+                                  bidirectional=True)
 
         self.word_fc = nn.Linear(self.max_len * self.att_hidden, self.att_hidden)
 
-        self.pre_encoder = TextCNNNet(n_emb, max_len['pre'], n_filter, n_kernels)
-        self.alt_encoder = TextCNNNet(n_emb, max_len['alt'], n_filter, n_kernels)
-        self.cur_encoder = TextCNNNet(n_emb, max_len['cur'], n_filter, n_kernels)
-        self.g_fc = nn.Sequential(nn.Linear(6 * n_filter + 2 * n_hidden, self.crn_hidden),
+        self.pre_encoder = TextCNNNet(n_emb, args.max_len['pre'], self.n_filter, self.n_kernels)
+        self.alt_encoder = TextCNNNet(n_emb, args.max_len['alt'], self.n_filter, self.n_kernels)
+        self.cur_encoder = TextCNNNet(n_emb, args.max_len['cur'], self.n_filter, self.n_kernels)
+        self.g_fc = nn.Sequential(nn.Linear(6 * self.n_filter + 2 * self.n_hidden, self.crn_hidden),
                                   nn.ReLU(),
-                                  nn.Dropout(dropout['layer']),
+                                  nn.Dropout(args.dropout['layer']),
                                   nn.Linear(self.crn_hidden, self.crn_hidden),
                                   nn.ReLU())
         self.f_fc = nn.Sequential(nn.Linear(self.crn_hidden, self.crn_hidden),
                                   nn.ReLU(),
-                                  nn.Dropout(dropout['layer']))
+                                  nn.Dropout(args.dropout['layer']))
 
         self.out_fc = nn.Sequential(nn.Linear(self.att_hidden + self.crn_hidden, self.gru_hidden),
                                     nn.ReLU(),
-                                    nn.Dropout(dropout['layer']),
-                                    nn.Linear(self.gru_hidden, output_size))
+                                    nn.Dropout(args.dropout['layer']),
+                                    nn.Linear(self.gru_hidden, args.n_class))
 
         self._init_weights(token_embeddings)
         logger.info('Time to build graph: {} s'.format(time() - start_t))
@@ -73,7 +73,7 @@ class MCIN(nn.Module):
         x_alt_word_emb = self.emb_dropout(x_alt_word_emb)
         x_cur_word_emb = self.emb_dropout(x_cur_word_emb)
 
-        if self.sinusoid:
+        if self.is_sinusoid:
             x_word_emb = self.pos_embedding(x_word_emb)
         #     x_word_emb += self.position_embedding(x)
         # else:
