@@ -17,6 +17,7 @@ class MCDN(nn.Module):
         self.gru_hidden = args.n_hidden
         self.crn_hidden = 4 * args.n_hidden
         self.n_block = args.n_block
+        self.n_head = args.n_head
         self.n_layer = args.n_layer
         self.n_filter = args.n_filter
         self.n_kernels = args.n_kernels
@@ -30,7 +31,7 @@ class MCDN(nn.Module):
         #     self.position_embedding = WordEmbedding(self.max_len, n_emb, zeros_pad=False, scale=False)
         self.emb_dropout = nn.Dropout(args.dropout['emb'])
         self.transformer = Encoder(self.n_head, self.n_block, n_emb, args.dropout['layer'])
-        self.seg_encoder = nn.GRU(n_emb, self.n_hidden, self.n_layer, dropout=args.dropout['layer'], batch_first=True,
+        self.seg_encoder = nn.GRU(n_emb, self.gru_hidden, self.n_layer, dropout=args.dropout['layer'], batch_first=True,
                                   bidirectional=True)
 
         self.word_fc = nn.Linear(self.max_len * self.att_hidden, self.att_hidden)
@@ -38,7 +39,7 @@ class MCDN(nn.Module):
         self.pre_encoder = TextCNNNet(n_emb, args.max_len['pre'], self.n_filter, self.n_kernels)
         self.alt_encoder = TextCNNNet(n_emb, args.max_len['alt'], self.n_filter, self.n_kernels)
         self.cur_encoder = TextCNNNet(n_emb, args.max_len['cur'], self.n_filter, self.n_kernels)
-        self.g_fc = nn.Sequential(nn.Linear(6 * self.n_filter + 2 * self.n_hidden, self.crn_hidden),
+        self.g_fc = nn.Sequential(nn.Linear(6 * self.n_filter + 2 * self.gru_hidden, self.crn_hidden),
                                   nn.ReLU(),
                                   nn.Dropout(args.dropout['layer']),
                                   nn.Linear(self.crn_hidden, self.crn_hidden),
