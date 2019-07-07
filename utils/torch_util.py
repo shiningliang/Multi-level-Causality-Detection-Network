@@ -4,6 +4,7 @@ import torch.nn.functional as functional
 from torch.autograd import Variable
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc, precision_recall_curve
 import matplotlib.pyplot as plt
+import ujson as json
 import seaborn
 import os
 seaborn.set_context(context="talk")
@@ -135,89 +136,6 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
     # return metrics, (loss_sum, acc_sum, auc_sum, prc_sum)
 
 
-def train_one_epoch(model, optimizer, loader, args, logger):
-    model.train()
-    train_loss = []
-    n_batch_loss = 0
-    weight = torch.from_numpy(np.array([0.8, 0.2], dtype=np.float32)).to(args.device)
-    for step, batch in enumerate(loader):
-        indexes, medicines, labels, seq_lens = tuple(map(lambda x: x.to(args.device), batch))
-        optimizer.zero_grad()
-        outputs = model(indexes, medicines)
-        # if args.is_fc:
-        #     criterion = FocalLoss(gamma=2, alpha=0.75)
-        # else:
-        #     criterion = torch.nn.CrossEntropyLoss(weight)
-        # loss = criterion(outputs.view(-1, args.n_class), labels.view(-1))
-        loss = compute_loss(logits=outputs, target=labels, length=seq_lens, weight=weight)
-        loss.backward()
-        if args.clip > 0:
-            # 梯度裁剪，输入是(NN参数，最大梯度范数，范数类型=2)，一般默认为L2范数
-            torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
-        optimizer.step()
-        n_batch_loss += loss.item()
-        bidx = step + 1
-        if bidx % args.period == 0:
-            logger.info('AvgLoss batch [{} {}] - {}'.format(bidx - args.period + 1, bidx, n_batch_loss / args.period))
-            n_batch_loss = 0
-        train_loss.append(loss.item())
-
-    avg_train_loss = np.mean(train_loss)
-    return avg_train_loss
-
-
-def evaluate_one_epoch(model, loader, device, data_type, is_point, logger):
-    losses = []
-    pre_labels, pre_scores, ref = [], [], []
-    fp = []
-    fn = []
-    metrics = {}
-    pre_points = {3: [], 18: [], 36: [], 72: [], 144: [], 216: []}
-    ref_points = {3: [], 18: [], 36: [], 72: [], 144: [], 216: []}
-    model.eval()
-    weight = torch.from_numpy(np.array([0.5, 0.5], dtype=np.float32)).to(device)
-    for step, batch in enumerate(loader):
-        indexes, medicines, labels, seq_lens = tuple(map(lambda x: x.to(device), batch))
-        outputs = model(indexes, medicines)
-        outputs = outputs.detach()
-        loss = compute_loss(logits=outputs, target=labels, length=seq_lens, weight=weight).item()
-        losses.append(loss)
-        output_labels = torch.max(outputs.cpu(), 2)[1].numpy()
-        output_scores = outputs.cpu()[:, :, 1].numpy()
-        labels = labels.cpu().numpy()
-        seq_lens = seq_lens.cpu().numpy()
-
-        for pre_label, pre_score, label, seq_len in zip(output_labels, output_scores, labels, seq_lens):
-            if is_point:
-                pre_labels.append(pre_label[seq_len - 1])
-                ref.append(label[seq_len - 1])
-            else:
-                pre_labels += pre_label[:seq_len].tolist()
-                pre_scores += pre_score[:seq_len].tolist()
-                ref += label[:seq_len].tolist()
-
-            for k, v in pre_points.items():
-                if seq_len >= k:
-                    v.append(pre_label[k - 1])
-                    ref_points[k].append(label[k - 1])
-
-    metrics['loss'] = np.mean(losses)
-    metrics['acc'] = accuracy_score(ref, pre_labels)
-    metrics['roc'] = roc_auc_score(ref, pre_scores)
-    (precisions, recalls, thresholds) = precision_recall_curve(ref, pre_scores)
-    metrics['prc'] = auc(recalls, precisions)
-    metrics['pse'] = np.max([min(x, y) for (x, y) in zip(precisions, recalls)])
-    if data_type == 'eval':
-        metrics['fp'] = fp
-        metrics['fn'] = fn
-    for k, v in pre_points.items():
-        logger.info('{} hour confusion matrix. AUCROC : {}'.format(int(k / 3), roc_auc_score(ref_points[k], v)))
-        logger.info(confusion_matrix(ref_points[k], v))
-    logger.info('Full confusion matrix')
-    logger.info(confusion_matrix(ref, pre_labels))
-    return metrics
-
-
 class FocalLoss(torch.nn.Module):
     def __init__(self, gamma=0, alpha=None, size_average=True):
         super(FocalLoss, self).__init__()
@@ -312,3 +230,16 @@ def trans_ids(ids, id2token_file):
 def draw(data, x, y, ax):
     seaborn.heatmap(data, linewidths=0.05, xticklabels=x, square=True, yticklabels=y, vmin=0.0, vmax=1.0,
                     cbar=False, ax=ax, cmap='Blues')
+
+
+def dump_json(file_path, obj):
+    with open(file_path, 'w') as f:
+        f.write(json.dumps(obj) + '\n')
+    f.close()
+
+
+def load_json(file_path):
+    with open(file_path, 'r') as f:
+        obj = json.load(f)
+    f.close()
+    return obj

@@ -483,7 +483,7 @@ def build_features(sentences, data_type, max_len, out_file, word2id, annotation_
     return meta
 
 
-def run_prepare(config, flags):
+def run_prepare(config):
     train_examples, train_corpus, train_seg, train_labels = preprocess_train(config.raw_dir, config.train_file,
                                                                              'train', config.build)
     transfer_examples1 = preprocess_transfer(config.raw_dir, config.transfer_file1, 'transfer')
@@ -494,42 +494,42 @@ def run_prepare(config, flags):
                                                                         'test', config.build)
 
     if config.build:
-        types = ['train', 'valid', 'test']
-        labels = [train_labels, valid_labels, test_labels]
-        segs = [train_seg, valid_seg, test_seg]
+        # types = ['train', 'valid', 'test']
+        # labels = [train_labels, valid_labels, test_labels]
+        # segs = [train_seg, valid_seg, test_seg]
         # for t, s, l in zip(types, segs, labels):
         #     gen_annotation(s, config.max_len, os.path.join(config.processed_dir, t + '_annotations.txt'), l, t)
-        save(flags.corpus_file, train_corpus, 'corpus')
-        corpus_dict = build_dict(flags.corpus_file)
-        token_emb_mat, token2id, id2token = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
-        save(flags.token_emb_file, token_emb_mat, message='embeddings')
-        save(flags.token2id_file, token2id, message='token to index')
-        save(flags.id2token_file, id2token, message='index to token')
+        save(config.corpus_file, train_corpus, 'corpus')
+        corpus_dict = build_dict(config.corpus_file)
+        token_emb_mat, token2id, id2token = get_embedding('word', corpus_dict, config.w2v_file, config.n_emb)
+        save(config.token_emb_file, token_emb_mat, message='embeddings')
+        save(config.token2id_file, token2id, message='token to index')
+        save(config.id2token_file, id2token, message='index to token')
     else:
-        with open(flags.token2id_file, 'r') as fh:
+        with open(config.token2id_file, 'r') as fh:
             token2id = json.load(fh)
 
-    transfer_meta1 = build_features(transfer_examples1, 'transfer', config.max_len, flags.transfer_record_file1,
+    transfer_meta1 = build_features(transfer_examples1, 'transfer', config.max_len, config.transfer_record_file1,
                                     token2id)
-    save(flags.transfer_meta1, transfer_meta1, message='transfer meta')
+    save(config.transfer_meta1, transfer_meta1, message='transfer meta')
     del transfer_examples1
-    transfer_meta2 = build_features(transfer_examples2, 'transfer', config.max_len, flags.transfer_record_file2,
+    transfer_meta2 = build_features(transfer_examples2, 'transfer', config.max_len, config.transfer_record_file2,
                                     token2id)
-    save(flags.transfer_meta2, transfer_meta2, message='transfer meta')
+    save(config.transfer_meta2, transfer_meta2, message='transfer meta')
     del transfer_examples2
 
-    train_meta = build_features(train_examples, 'train', config.max_len, flags.train_record_file, token2id,
-                                flags.train_annotation)
-    save(flags.train_meta, train_meta, message='train meta')
+    train_meta = build_features(train_examples, 'train', config.max_len, config.train_record_file, token2id,
+                                config.train_annotation)
+    save(config.train_meta, train_meta, message='train meta')
     del train_examples, train_corpus
 
-    valid_meta = build_features(valid_examples, 'valid', config.max_len, flags.valid_record_file, token2id)
-    save(flags.valid_meta, valid_meta, message='valid meta')
+    valid_meta = build_features(valid_examples, 'valid', config.max_len, config.valid_record_file, token2id)
+    save(config.valid_meta, valid_meta, message='valid meta')
     del valid_examples, valid_corpus
 
-    test_meta = build_features(test_examples, 'test', config.max_len, flags.test_record_file, token2id,
-                               flags.test_annotation)
-    save(flags.test_meta, test_meta, message='test meta')
+    test_meta = build_features(test_examples, 'test', config.max_len, config.test_record_file, token2id,
+                               config.test_annotation)
+    save(config.test_meta, test_meta, message='test meta')
     del test_examples, test_corpus
 
-    save(flags.shape_meta, {'max_len': config.max_len}, message='shape meta')
+    save(config.shape_meta, {'max_len': config.max_len}, message='shape meta')
