@@ -12,8 +12,9 @@ import models
 
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
+from models.torch_DPCNN import TextCNNDeep
 
-from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve
+from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, save_loss, save_metrics
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -33,6 +34,8 @@ def parse_args():
                         help='evaluate the model on dev set')
     parser.add_argument('--predict', action='store_true',
                         help='predict the answers for test set with trained model')
+    parser.add_argument('--multi', type=str, default=5,
+                        help='times for experiment')
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
     parser.add_argument('--seed', type=int, default=23333,
@@ -55,7 +58,7 @@ def parse_args():
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=20,
+    train_settings.add_argument('--epochs', type=int, default=10,
                                 help='train epochs')
     train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
@@ -109,7 +112,7 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='training',
                                help='the task name')
-    path_settings.add_argument('--model', default='MCDN',
+    path_settings.add_argument('--model', default='DPCNN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
@@ -213,35 +216,36 @@ def train(args, file_paths):
 
     args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
-    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+    # model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
     # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
-    #                 args.is_sinusoid, dropout, logger).to(device=args.device)
-    # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
-    #                     dropout, logger).to(device=args.device)
+    #                 args.is_sinusoid, args.dropout, logger).to(device=args.device)
+    model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
+                        args.dropout, logger).to(device=args.device)
     # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
-    #                 args.is_pos, args.is_sinusoid, dropout, logger).to(device=args.device)
+    #                 args.is_pos, args.is_sinusoid, args.dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
     # torch.backends.cudnn.benchmark = True
-    max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
-    FALSE = {}
-    ROC = {}
-    PRC = {}
+    max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = 0, 0, 0, 0, 0, 0, 0, 0
+    FALSE, ROC, PRC = {}, {}, {}
+    train_loss, valid_loss = [], []
     for ep in range(1, args.epochs + 1):
         logger.info('Training the model for epoch {}'.format(ep))
         avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
+        train_loss.append(avg_loss)
         logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
         logger.info('Evaluating the model for epoch {}'.format(ep))
         eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
                                                                    args.device, args.is_fc, 'valid', logger)
+        valid_loss.append(eval_metrics['loss'])
         logger.info('Valid Loss - {}'.format(eval_metrics['loss']))
         logger.info('Valid Acc - {}'.format(eval_metrics['acc']))
         logger.info('Valid Precision - {}'.format(eval_metrics['precision']))
@@ -249,12 +253,14 @@ def train(args, file_paths):
         logger.info('Valid F1 - {}'.format(eval_metrics['f1']))
         logger.info('Valid AUCROC - {}'.format(eval_metrics['auc_roc']))
         logger.info('Valid AUCPRC - {}'.format(eval_metrics['auc_prc']))
-        max_acc = max((eval_metrics['acc'], max_acc))
-        max_p = max(eval_metrics['precision'], max_p)
-        max_r = max(eval_metrics['recall'], max_r)
-        max_f = max(eval_metrics['f1'], max_f)
-        valid_sum = eval_metrics['precision'] + eval_metrics['recall'] + eval_metrics['f1']
+        valid_sum = eval_metrics['auc_roc'] + eval_metrics['auc_prc'] + eval_metrics['f1']
         if valid_sum > max_sum:
+            max_acc = eval_metrics['acc']
+            max_p = eval_metrics['precision']
+            max_r = eval_metrics['recall']
+            max_f = eval_metrics['f1']
+            max_roc = eval_metrics['auc_roc']
+            max_prc = eval_metrics['auc_prc']
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
@@ -276,7 +282,10 @@ def train(args, file_paths):
     dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
     dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
     dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
+    save_loss(train_loss, valid_loss, args.result_dir)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
+
+    return max_acc, max_p, max_r, max_f, max_roc, max_prc, max_epoch
 
 
 def evaluate(args, file_paths):
@@ -326,7 +335,7 @@ def evaluate(args, file_paths):
     logger.info('Eval AUCROC - {}'.format(eval_metrics['auc_roc']))
     logger.info('Eval AUCPRC - {}'.format(eval_metrics['auc_prc']))
 
-    if args.model == 'MCIN' or args.model == 'TB':
+    if args.model == 'MCDN' or args.model == 'TB':
         draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
                  args.pics_dir, args.n_block, args.n_head, logger)
 
@@ -427,13 +436,12 @@ def run():
 
     file_paths = FilePaths(args.w2v_type)
     if args.prepare:
-        # max_seq_len, index_dim = run_prepare(args, file_paths)
         run_prepare(args, file_paths)
-        # with open(file_paths.shape_meta, 'wb') as fh:
-        #     pkl.dump({'max_len': max_seq_len, 'dim': index_dim}, fh)
-        # fh.close()
     if args.train:
-        train(args, file_paths)
+        records = np.zeros((args.multi, 7), dtype=np.float)
+        for i in range(args.multi):
+            records[i] = train(args, file_paths)
+        save_metrics(records, args.result_dir)
     if args.evaluate:
         evaluate(args, file_paths)
 

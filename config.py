@@ -5,7 +5,7 @@ import os.path as op
 
 class DefaultConfig(object):
     def __init__(self):
-        self.prepare = True
+        self.prepare = False
         self.build = False
         self.train = True
         self.evaluate = True
@@ -42,8 +42,8 @@ class DefaultConfig(object):
         self.kmax_pooling = 2
         self.n_class = 2
 
-        task = 'training'
-        model = 'MCDN'
+        self.task = 'training'
+        self.model = 'TextCNN'
         self.train_file = 'altlex_train.tsv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'

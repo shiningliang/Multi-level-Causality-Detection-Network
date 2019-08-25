@@ -347,11 +347,7 @@ def run():
 
     file_paths = FilePaths(args.w2v_type)
     if args.prepare:
-        # max_seq_len, index_dim = run_prepare(args, file_paths)
         run_prepare(args, file_paths)
-        # with open(file_paths.shape_meta, 'wb') as fh:
-        #     pkl.dump({'max_len': max_seq_len, 'dim': index_dim}, fh)
-        # fh.close()
     if args.train:
         train(args, file_paths)
 

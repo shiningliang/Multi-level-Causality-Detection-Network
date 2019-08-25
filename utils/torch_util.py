@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import ujson as json
 import seaborn
 import os
+import pandas as pd
 seaborn.set_context(context="talk")
 plt.switch_backend('agg')
 
@@ -243,3 +244,13 @@ def load_json(file_path):
         obj = json.load(f)
     f.close()
     return obj
+
+
+def save_loss(train_loss, valid_loss, path):
+    df = pd.DataFrame({'train': train_loss, 'valid': valid_loss})
+    df.to_csv(os.path.join(path, 'loss.csv'), index=False)
+
+
+def save_metrics(me_array, path):
+    df = pd.DataFrame(me_array, columns=['acc', 'precision', 'recall', 'f1', 'roc', 'prc', 'epoch'])
+    df.to_csv(os.path.join(path, 'metrics.csv'), index=False)

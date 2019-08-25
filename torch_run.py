@@ -10,7 +10,7 @@ import models
 from config import opt
 
 
-from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json
+from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_csv
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -95,17 +95,18 @@ def train(args):
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
     # torch.backends.cudnn.benchmark = True
     max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
-    FALSE = {}
-    ROC = {}
-    PRC = {}
+    FALSE, ROC, PRC = {}, {}, {}
+    train_loss, valid_loss = [], []
     for ep in range(1, args.epochs + 1):
         logger.info('Training the model for epoch {}'.format(ep))
         avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
+        train_loss.append(avg_loss)
         logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
         logger.info('Evaluating the model for epoch {}'.format(ep))
         eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
                                                                    args.device, args.is_fc, 'valid', logger)
+        valid_loss.append(eval_metrics['loss'])
         logger.info('Valid Loss - {}'.format(eval_metrics['loss']))
         logger.info('Valid Acc - {}'.format(eval_metrics['acc']))
         logger.info('Valid Precision - {}'.format(eval_metrics['precision']))
@@ -139,6 +140,7 @@ def train(args):
     dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
     dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
     dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
+    save_csv(train_loss, valid_loss, args.pics_dir)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 
@@ -182,7 +184,7 @@ def evaluate(args):
     logger.info('Eval AUCROC - {}'.format(eval_metrics['auc_roc']))
     logger.info('Eval AUCPRC - {}'.format(eval_metrics['auc_prc']))
 
-    if args.model == 'MCIN' or args.model == 'TB':
+    if args.model == 'MCDN' or args.model == 'TB':
         draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
                  args.pics_dir, args.n_block, args.n_head, logger)
 

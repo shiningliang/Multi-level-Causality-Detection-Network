@@ -4,15 +4,9 @@ from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.stem import WordNetLemmatizer
 import collections
+import pandas as pd
 
-data_path = os.getcwd()
-error_path = os.path.join(data_path, 'data/FALSE.json')
-train_path = os.path.join(data_path, 'data/raw_data/altlex_train_bootstrapped.tsv')
-test_path = os.path.join(data_path, 'data/raw_data/altlex_gold.tsv')
 wnl = WordNetLemmatizer()
-
-with open(error_path, 'r') as fh:
-    error_meta = json.load(fh)
 
 
 def lemmatize_all(sentence):
@@ -35,7 +29,7 @@ def gen_train(path):
     all_alt = []
     SPACE = ' '
     i = 0
-    with open(path, 'r', encoding='utf8') as fh:
+    with open(path, 'r', encoding='ISO-8859-1') as fh:
         for line in fh:
             i += 1
             line = line.strip().split('\t')
@@ -49,7 +43,7 @@ def gen_train(path):
     return all_alt
 
 
-def gen_test(path):
+def gen_test(path, error_meta):
     fp_alt = []
     fn_alt = []
     all_alt = []
@@ -67,7 +61,7 @@ def gen_test(path):
                 fn_alt.append(alt)
             all_alt.append(alt)
     fh.close()
-    ids = [j for j in range(1, i+1)]
+    ids = [j for j in range(1, i + 1)]
     for fp in error_meta['FP']:
         ids.remove(fp)
     for fn in error_meta['FN']:
@@ -76,24 +70,57 @@ def gen_test(path):
     return fp_alt, fn_alt, all_alt, ids
 
 
-train_all_alt = gen_train(train_path)
-train_set = set(train_all_alt)
-test_fp_alt, test_fn_alt, test_all_alt, ids = gen_test(test_path)
-test_set = set(test_all_alt)
-not_in_train = test_set.difference(test_set.intersection(train_set))
-print('Not in train: ', not_in_train)
+# english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%', '"', '``',
+# '-', '\'\''] seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in
+# sen] for sen in sens]
 
-tc = collections.Counter(train_all_alt)
-fpc = collections.Counter(test_fp_alt)
-fnc = collections.Counter(test_fn_alt)
-allc = collections.Counter(test_all_alt)
-print('Top 5 in Train: ', tc.most_common(5))
-print('Top 5 in Test: ', allc.most_common(5))
-print('Top 5 in FP: ', fpc.most_common(5))
-print('Top 5 in FN: ', fnc.most_common(5))
-print(ids)
 
-# english_punctuations = [',', '.', ':', ';', '?', '(', ')', '[', ']', '&', '!', '*', '@', '#', '$', '%',
-#                         '"', '``', '-', '\'\'']
-# seg_test_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in sen] for sen in sens]
-print('\nhello world!')
+if __name__ == "__main__":
+    training_path = '../data/raw_data/altlex_train.tsv'
+    boot_path = '../data/raw_data/altlex_train_bootstrapped.tsv'
+    test_path = '../data/raw_data/altlex_gold.tsv'
+
+    training_all_alt = gen_train(training_path)
+    boot_all_alt = gen_train(boot_path)
+    training_set = set(training_all_alt)
+    boot_set = set(boot_all_alt)
+
+    error_path = '../outputs/training/MCDN/results//FALSE_valid.json'
+    with open(error_path, 'r') as fh:
+        error_meta = json.load(fh)
+    test_fp_alt, test_fn_alt, test_all_alt, ids = gen_test(test_path, error_meta)
+    test_set = set(test_all_alt)
+    not_in_training = test_set.difference(test_set.intersection(training_set))
+    not_in_boot = test_set.difference(test_set.intersection(boot_set))
+    print("Not in training: ", not_in_training)
+    print("Not in bootstrapped: ", not_in_boot)
+
+    tc = collections.Counter(training_all_alt)
+    bc = collections.Counter(boot_all_alt)
+    fpc = collections.Counter(test_fp_alt)
+    fnc = collections.Counter(test_fn_alt)
+    tec = collections.Counter(test_all_alt)
+    print('Top 5 in Train: ', tc.most_common(5))
+    tck, tcv = [], []
+    for k, v in tc.most_common(20):
+        tck.append(k)
+        tcv.append(v)
+    print('Top 5 in Test: ', tec.most_common(5))
+    tek, tev = [], []
+    for k, v in tec.most_common(20):
+        tek.append(k)
+        tev.append(v)
+    print('Top 5 in FP: ', fpc.most_common(5))
+    fpk, fpv = [], []
+    for k, v in fpc.most_common(20):
+        fpk.append(k)
+        fpv.append(v)
+    print('Top 5 in FN: ', fnc.most_common(5))
+    fnk, fnv = [], []
+    for k, v in fnc.most_common(20):
+        fnk.append(k)
+        fnv.append(v)
+    print(ids)
+    df = pd.DataFrame({'train_word': tck, 'train_freq': tcv, 'test_word': tek, 'test_freq': tev,
+                       'fp_word': fpk, 'fp_freq': fpv, 'fn_word': fnk, 'fn_freq': fnv})
+    df.to_csv('../analysis.csv', index=False)
