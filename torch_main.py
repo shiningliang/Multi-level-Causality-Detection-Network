@@ -48,11 +48,11 @@ def parse_args():
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0.0003,
+    train_settings.add_argument('--weight_decay', type=float, default=0,
                                 help='weight decay')
-    train_settings.add_argument('--emb_dropout', type=float, default=0.3,
+    train_settings.add_argument('--emb_dropout', type=float, default=0,
                                 help='dropout keep rate')
-    train_settings.add_argument('--layer_dropout', type=float, default=0.3,
+    train_settings.add_argument('--layer_dropout', type=float, default=0.5,
                                 help='dropout keep rate')
     train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
@@ -102,19 +102,21 @@ def parse_args():
                                 help='kernels size (default: 2, 3, 4)')
     model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
-    model_settings.add_argument('--n_filter', type=int, default=50,
+    model_settings.add_argument('--n_filter', type=int, default=100,
                                 help='number of hidden units per layer (default: 256)')
     model_settings.add_argument('--n_class', type=int, default=2,
                                 help='class size (default: 2)')
     model_settings.add_argument('--kmax_pooling', type=int, default=2,
                                 help='top-K max pooling')
+    model_settings.add_argument('--dp_blocks', type=int, default=3,
+                                help='dpcnn block size (default: 3)')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='training',
                                help='the task name')
     path_settings.add_argument('--model', default='DPCNN',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
@@ -216,7 +218,7 @@ def train(args, file_paths):
 
     args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     logger.info('Initialize the model...')
-    # model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
     #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).to(
     #     device=args.device)
@@ -224,68 +226,81 @@ def train(args, file_paths):
     #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
     # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
     #                 args.is_sinusoid, args.dropout, logger).to(device=args.device)
-    model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
-                        args.dropout, logger).to(device=args.device)
+    # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
+    #                     args.dropout, logger).to(device=args.device)
     # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
     #                 args.is_pos, args.is_sinusoid, args.dropout, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
-    # torch.backends.cudnn.benchmark = True
-    max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = 0, 0, 0, 0, 0, 0, 0, 0
-    FALSE, ROC, PRC = {}, {}, {}
-    train_loss, valid_loss = [], []
-    for ep in range(1, args.epochs + 1):
-        logger.info('Training the model for epoch {}'.format(ep))
-        avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
-        train_loss.append(avg_loss)
-        logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
+    records = np.zeros((args.multi, 7), dtype=np.float)
+    best_sum = -1
+    for i in range(1, args.multi + 1):
+        logger.info('Turn {}'.format(i))
+        max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = np.zeros(8)
+        FALSE, ROC, PRC = {}, {}, {}
+        train_loss, valid_loss = [], []
+        is_best = False
+        for ep in range(1, args.epochs + 1):
+            logger.info('Training the model for epoch {}'.format(ep))
+            avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
+            train_loss.append(avg_loss)
+            logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
-        logger.info('Evaluating the model for epoch {}'.format(ep))
-        eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
-                                                                   args.device, args.is_fc, 'valid', logger)
-        valid_loss.append(eval_metrics['loss'])
-        logger.info('Valid Loss - {}'.format(eval_metrics['loss']))
-        logger.info('Valid Acc - {}'.format(eval_metrics['acc']))
-        logger.info('Valid Precision - {}'.format(eval_metrics['precision']))
-        logger.info('Valid Recall - {}'.format(eval_metrics['recall']))
-        logger.info('Valid F1 - {}'.format(eval_metrics['f1']))
-        logger.info('Valid AUCROC - {}'.format(eval_metrics['auc_roc']))
-        logger.info('Valid AUCPRC - {}'.format(eval_metrics['auc_prc']))
-        valid_sum = eval_metrics['auc_roc'] + eval_metrics['auc_prc'] + eval_metrics['f1']
-        if valid_sum > max_sum:
-            max_acc = eval_metrics['acc']
-            max_p = eval_metrics['precision']
-            max_r = eval_metrics['recall']
-            max_f = eval_metrics['f1']
-            max_roc = eval_metrics['auc_roc']
-            max_prc = eval_metrics['auc_prc']
-            max_sum = valid_sum
-            max_epoch = ep
-            FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
-            ROC = {'FPR': fpr, 'TPR': tpr}
-            PRC = {'PRECISION': precision, 'RECALL': recall}
-            # torch.save(model, os.path.join(args.model_dir, 'model.pth'))
-            torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.bin'))
+            logger.info('Evaluating the model for epoch {}'.format(ep))
+            eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
+                                                                       args.device, args.is_fc, 'valid', logger)
+            valid_loss.append(eval_metrics['loss'])
+            logger.info('Valid Loss - {}'.format(eval_metrics['loss']))
+            logger.info('Valid Acc - {}'.format(eval_metrics['acc']))
+            logger.info('Valid Precision - {}'.format(eval_metrics['precision']))
+            logger.info('Valid Recall - {}'.format(eval_metrics['recall']))
+            logger.info('Valid F1 - {}'.format(eval_metrics['f1']))
+            logger.info('Valid AUCROC - {}'.format(eval_metrics['auc_roc']))
+            logger.info('Valid AUCPRC - {}'.format(eval_metrics['auc_prc']))
+            valid_sum = eval_metrics['auc_roc'] + eval_metrics['auc_prc'] + eval_metrics['f1']
+            if valid_sum > max_sum:
+                max_acc = eval_metrics['acc']
+                max_p = eval_metrics['precision']
+                max_r = eval_metrics['recall']
+                max_f = eval_metrics['f1']
+                max_roc = eval_metrics['auc_roc']
+                max_prc = eval_metrics['auc_prc']
+                max_sum = valid_sum
+                max_epoch = ep
+                FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
+                ROC = {'FPR': fpr, 'TPR': tpr}
+                PRC = {'PRECISION': precision, 'RECALL': recall}
+                # torch.save(model, os.path.join(args.model_dir, 'model.pth'))
+                if max_sum > best_sum:
+                    best_sum = max_sum
+                    is_best = True
+                    torch.save(model.state_dict(),
+                               os.path.join(args.model_dir, 'model_turn' + str(i) + '_epoch' + str(ep) + '.bin'))
 
-        scheduler.step(metrics=eval_metrics['f1'])
-        random.shuffle(train_file)
+            scheduler.step(metrics=eval_metrics['f1'])
+            random.shuffle(train_file)
 
-    logger.info('Max Acc - {}'.format(max_acc))
-    logger.info('Max Precision - {}'.format(max_p))
-    logger.info('Max Recall - {}'.format(max_r))
-    logger.info('Max F1 - {}'.format(max_f))
-    logger.info('Max Epoch - {}'.format(max_epoch))
-    logger.info('Max Sum - {}'.format(max_sum))
+        logger.info('Max Acc - {}'.format(max_acc))
+        logger.info('Max Precision - {}'.format(max_p))
+        logger.info('Max Recall - {}'.format(max_r))
+        logger.info('Max F1 - {}'.format(max_f))
+        logger.info('Max ROC - {}'.format(max_roc))
+        logger.info('Max PRC - {}'.format(max_prc))
+        logger.info('Max Epoch - {}'.format(max_epoch))
+        logger.info('Max Sum - {}'.format(max_sum))
 
-    dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
-    dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
-    dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
-    save_loss(train_loss, valid_loss, args.result_dir)
-    draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
+        if is_best:
+            dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
+            dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
+            dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
+            save_loss(train_loss, valid_loss, args.result_dir)
+            draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
-    return max_acc, max_p, max_r, max_f, max_roc, max_prc, max_epoch
+        records[i - 1] = [max_acc, max_p, max_r, max_f, max_roc, max_prc, max_epoch]
+
+    save_metrics(records, args.result_dir)
 
 
 def evaluate(args, file_paths):
@@ -396,7 +411,8 @@ def run():
     args.result_dir = os.path.join(args.outputs_dir, args.task, args.model, args.result_dir)
     args.pics_dir = os.path.join(args.outputs_dir, args.task, args.model, args.pics_dir)
     args.summary_dir = os.path.join(args.outputs_dir, args.task, args.model, args.summary_dir)
-    for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.pics_dir, args.summary_dir]:
+    for dir_path in [args.raw_dir, args.processed_dir, args.model_dir, args.result_dir, args.pics_dir,
+                     args.summary_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -436,12 +452,9 @@ def run():
 
     file_paths = FilePaths(args.w2v_type)
     if args.prepare:
-        run_prepare(args, file_paths)
+        run_prepare(args)
     if args.train:
-        records = np.zeros((args.multi, 7), dtype=np.float)
-        for i in range(args.multi):
-            records[i] = train(args, file_paths)
-        save_metrics(records, args.result_dir)
+        train(args, file_paths)
     if args.evaluate:
         evaluate(args, file_paths)
 
