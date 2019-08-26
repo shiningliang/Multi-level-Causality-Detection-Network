@@ -10,7 +10,7 @@ import models
 from config import opt
 
 
-from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_csv
+from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_loss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -94,7 +94,7 @@ def train(args):
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
     # torch.backends.cudnn.benchmark = True
-    max_acc, max_p, max_r, max_f, max_sum, max_epoch = 0, 0, 0, 0, 0, 0
+    max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = np.zeros(8)
     FALSE, ROC, PRC = {}, {}, {}
     train_loss, valid_loss = [], []
     for ep in range(1, args.epochs + 1):
@@ -118,8 +118,14 @@ def train(args):
         max_p = max(eval_metrics['precision'], max_p)
         max_r = max(eval_metrics['recall'], max_r)
         max_f = max(eval_metrics['f1'], max_f)
-        valid_sum = eval_metrics['precision'] + eval_metrics['recall'] + eval_metrics['f1']
+        valid_sum = eval_metrics['auc_roc'] + eval_metrics['auc_prc'] + eval_metrics['f1']
         if valid_sum > max_sum:
+            max_acc = eval_metrics['acc']
+            max_p = eval_metrics['precision']
+            max_r = eval_metrics['recall']
+            max_f = eval_metrics['f1']
+            max_roc = eval_metrics['auc_roc']
+            max_prc = eval_metrics['auc_prc']
             max_sum = valid_sum
             max_epoch = ep
             FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
@@ -134,13 +140,15 @@ def train(args):
     logger.info('Max Precision - {}'.format(max_p))
     logger.info('Max Recall - {}'.format(max_r))
     logger.info('Max F1 - {}'.format(max_f))
+    logger.info('Max ROC - {}'.format(max_roc))
+    logger.info('Max PRC - {}'.format(max_prc))
     logger.info('Max Epoch - {}'.format(max_epoch))
     logger.info('Max Sum - {}'.format(max_sum))
 
     dump_json(os.path.join(args.result_dir, 'FALSE_valid.json'), FALSE)
     dump_json(os.path.join(args.result_dir, 'ROC_valid.json'), ROC)
     dump_json(os.path.join(args.result_dir, 'PRC_valid.json'), PRC)
-    save_csv(train_loss, valid_loss, args.pics_dir)
+    save_loss(train_loss, valid_loss, args.result_dir)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 

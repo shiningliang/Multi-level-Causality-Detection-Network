@@ -20,7 +20,7 @@ class DefaultConfig(object):
         self.layer_dropout = 0.3
         self.batch_train = 32
         self.batch_eval = 64
-        self.epochs = 20
+        self.epochs = 10
         self.optim = 'Adam'
         self.patience = 2
         self.period = 1000
@@ -43,7 +43,7 @@ class DefaultConfig(object):
         self.n_class = 2
 
         self.task = 'training'
-        self.model = 'TextCNN'
+        self.model = 'MCDN'
         self.train_file = 'altlex_train.tsv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'
