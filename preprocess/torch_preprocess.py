@@ -128,6 +128,7 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
                         in seg_sims]
 
     total = 0
+    seq_len = []
     for label, eng, sim in zip(labels, seg_eng_filtered, seg_sim_filtered):
         total += 1
         # for idx, seg in enumerate(eng):
@@ -142,6 +143,7 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
                          'tokens_alt': mid,
                          'tokens_cur': cur,
                          'cau_label': label})
+        seq_len.append(len(pre + mid + cur))
         # examples.append({'eid': total,
         #                  'tokens': eng[0] + eng[1] + eng[2],
         #                  'tokens_pre': eng[0],
@@ -162,6 +164,7 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
                          'tokens_alt': mid,
                          'tokens_cur': cur,
                          'cau_label': label})
+        seq_len.append(len(pre + mid + cur))
         # examples.append({'eid': total,
         #                  'tokens': sim[0] + sim[1] + sim[2],
         #                  'tokens_pre': sim[0],
@@ -177,6 +180,7 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
     else:
         sentences = []
     np.random.shuffle(examples)
+    stat_length(seq_len)
     return examples, sentences, (seg_eng_filtered, seg_sim_filtered), labels
 
 
@@ -205,6 +209,7 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
     seg_filtered = [[[word.lower() for word in seg if word not in english_punctuations] for seg in eng] for eng in
                     segments]
     total = 0
+    seq_len = []
     for label, seg in zip(labels, seg_filtered):
         total += 1
         pre, mid, cur, flag = check_null(seg)
@@ -216,7 +221,7 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
                          'tokens_alt': mid,
                          'tokens_cur': cur,
                          'cau_label': label})
-    # stat(seq_len)
+        seq_len.append(len(pre + mid + cur))
     # print('Get {} total examples'.format(total))
     # print('Get {} causal examples'.format(causal))
     # print('Get {} non-causal examples'.format(non_causal))
@@ -224,6 +229,7 @@ def preprocess_test(file_path, file_name, data_type, is_build=False):
         sentences = [SPACE.join(tokens) for tokens in sen_filtered]
     else:
         sentences = []
+    stat_length(seq_len)
     return examples, sentences, seg_filtered, labels
 
 

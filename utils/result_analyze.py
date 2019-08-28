@@ -43,7 +43,7 @@ def gen_train(path):
     return all_alt
 
 
-def gen_test(path, error_meta):
+def gen_test(path, error_meta=None):
     fp_alt = []
     fn_alt = []
     all_alt = []
@@ -55,11 +55,12 @@ def gen_test(path, error_meta):
             line = line.strip().split('\t')
             del line[-1]
             alt = SPACE.join(lemmatize_all(line[1]))
-            if i in error_meta['FP']:
-                fp_alt.append(alt)
-            elif i in error_meta['FN']:
-                fn_alt.append(alt)
             all_alt.append(alt)
+            if error_meta:
+                if i in error_meta['FP']:
+                    fp_alt.append(alt)
+                elif i in error_meta['FN']:
+                    fn_alt.append(alt)
     fh.close()
     ids = [j for j in range(1, i + 1)]
     for fp in error_meta['FP']:
@@ -78,6 +79,7 @@ def gen_test(path, error_meta):
 if __name__ == "__main__":
     training_path = '../data/raw_data/altlex_train.tsv'
     boot_path = '../data/raw_data/altlex_train_bootstrapped.tsv'
+    valid_path = '../data/raw_data/altlex_dev.tsv'
     test_path = '../data/raw_data/altlex_gold.tsv'
 
     training_all_alt = gen_train(training_path)
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     training_set = set(training_all_alt)
     boot_set = set(boot_all_alt)
 
-    error_path = '../outputs/training/MCDN/results//FALSE_valid.json'
+    error_path = '../outputs/training/MCDN/results/FALSE_valid.json'
     with open(error_path, 'r') as fh:
         error_meta = json.load(fh)
     test_fp_alt, test_fn_alt, test_all_alt, ids = gen_test(test_path, error_meta)

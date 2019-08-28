@@ -7,13 +7,14 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
+from pytorch_transformers import WarmupCosineSchedule
+
 from preprocess.torch_preprocess import run_prepare
 import models
-
 from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
 from models.torch_DPCNN import TextCNNDeep
-
+from models.tencent_DPCNN import DPCNN
 from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, save_loss, save_metrics
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
@@ -44,15 +45,17 @@ def parse_args():
     train_settings = parser.add_argument_group('train settings')
     train_settings.add_argument('--disable_cuda', action='store_true',
                                 help='Disable CUDA')
+    train_settings.add_argument('--warmup', type=float, default=0.5,
+                                help='learning rate warmup proportion')
     train_settings.add_argument('--lr', type=float, default=0.0001,
                                 help='learning rate')
     train_settings.add_argument('--clip', type=float, default=0.35,
                                 help='gradient clip, -1 means no clip (default: 0.35)')
-    train_settings.add_argument('--weight_decay', type=float, default=0,
+    train_settings.add_argument('--weight_decay', type=float, default=0.0003,
                                 help='weight decay')
-    train_settings.add_argument('--emb_dropout', type=float, default=0,
+    train_settings.add_argument('--emb_dropout', type=float, default=0.3,
                                 help='dropout keep rate')
-    train_settings.add_argument('--layer_dropout', type=float, default=0.5,
+    train_settings.add_argument('--layer_dropout', type=float, default=0.3,
                                 help='dropout keep rate')
     train_settings.add_argument('--batch_train', type=int, default=32,
                                 help='train batch size')
@@ -60,7 +63,7 @@ def parse_args():
                                 help='dev batch size')
     train_settings.add_argument('--epochs', type=int, default=10,
                                 help='train epochs')
-    train_settings.add_argument('--optim', default='Adam',
+    train_settings.add_argument('--optim', default='AdamW',
                                 help='optimizer type')
     train_settings.add_argument('--patience', type=int, default=2,
                                 help='num of epochs for train patients')
@@ -145,7 +148,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
+def train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, logger):
     model.train()
     train_loss = []
     n_batch_loss = 0
@@ -175,6 +178,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
             # 梯度裁剪，输入是(NN参数，最大梯度范数，范数类型=2)，一般默认为L2范数
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         optimizer.step()
+        scheduler.step()
         n_batch_loss += loss.item()
         bidx = batch_idx + 1
         if bidx % args.period == 0:
@@ -184,12 +188,6 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 
     avg_train_loss = np.mean(train_loss)
     return avg_train_loss
-    # avg_train_acc = np.mean(train_acc)
-    # logger.info('Epoch {} Average Loss {} Average Acc {}'.format(ep, avg_train_loss, avg_train_acc))
-    # loss_sum = tf.Summary(value=[tf.Summary.Value(tag="model/loss", simple_value=avg_train_loss), ])
-    # acc_sum = tf.Summary(value=[tf.Summary.Value(tag="model/acc", simple_value=avg_train_acc), ])
-    # writer.add_summary(loss_sum, epoch)
-    # writer.add_summary(acc_sum, epoch)
 
 
 def train(args, file_paths):
@@ -231,12 +229,14 @@ def train(args, file_paths):
         #                 args.is_sinusoid, args.dropout, logger).to(device=args.device)
         # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
         #                     args.dropout, logger).to(device=args.device)
+        # model = DPCNN(token_embeddings, args, logger).to(device=args.device)
         # model = TextRNN(token_embeddings, args.n_class, args.n_hidden, args.n_layer, args.kmax_pooling,
         #                 args.is_pos, args.is_sinusoid, args.dropout, logger).to(device=args.device)
         lr = args.lr
         optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
         # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
+        scheduler = WarmupCosineSchedule(optimizer, args.warmup, (train_num // args.batch_train + 1) * args.epochs)
         logger.info('Turn {}'.format(i))
         max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = np.zeros(8)
         FALSE, ROC, PRC = {}, {}, {}
@@ -244,7 +244,7 @@ def train(args, file_paths):
         is_best = False
         for ep in range(1, args.epochs + 1):
             logger.info('Training the model for epoch {}'.format(ep))
-            avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
+            avg_loss = train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, logger)
             train_loss.append(avg_loss)
             logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
@@ -276,10 +276,8 @@ def train(args, file_paths):
                 if max_sum > best_sum:
                     best_sum = max_sum
                     is_best = True
-                    torch.save(model.state_dict(),
-                               os.path.join(args.model_dir, 'model_turn' + str(i) + '_epoch' + str(ep) + '.bin'))
+                    torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.bin'))
 
-            scheduler.step(metrics=eval_metrics['f1'])
             random.shuffle(train_file)
 
         logger.info('Max Acc - {}'.format(max_acc))

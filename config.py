@@ -8,11 +8,12 @@ class DefaultConfig(object):
         self.prepare = False
         self.build = False
         self.train = True
-        self.evaluate = True
+        self.evaluate = False
         self.gpu = '0'
         self.seed = 23333
 
         self.disable_cuda = False
+        self.warmup = 0.5
         self.lr = 0.0001
         self.weight_decay = 0.0003
         self.clip = 0.35
@@ -21,7 +22,7 @@ class DefaultConfig(object):
         self.batch_train = 32
         self.batch_eval = 64
         self.epochs = 10
-        self.optim = 'Adam'
+        self.optim = 'AdamW'
         self.patience = 2
         self.period = 1000
         self.num_threads = 8

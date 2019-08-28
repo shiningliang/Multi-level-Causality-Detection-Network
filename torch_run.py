@@ -5,17 +5,16 @@ import pickle as pkl
 import numpy as np
 import torch
 import torch.optim as optim
+from pytorch_transformers import WarmupCosineSchedule
+from config import opt
 from preprocess.torch_preprocess import run_prepare
 import models
-from config import opt
-
-
 from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_loss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
 
-def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
+def train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, logger):
     model.train()
     train_loss = []
     n_batch_loss = 0
@@ -23,14 +22,11 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
-        # sentences, cau_labels, seq_lens = get_batch(train_file[start_idx:end_idx], args.device)
         tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, _ = get_batch(train_file[start_idx:end_idx],
                                                                                         args.device)
 
         optimizer.zero_grad()
         outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
-        # outputs = model(sentences)
-        # loss = compute_loss(logits=outputs, target=labels, length=seq_lens)
         if args.is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
         else:
@@ -45,6 +41,7 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
             # 梯度裁剪，输入是(NN参数，最大梯度范数，范数类型=2)，一般默认为L2范数
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         optimizer.step()
+        scheduler.step()
         n_batch_loss += loss.item()
         bidx = batch_idx + 1
         if bidx % args.period == 0:
@@ -54,12 +51,6 @@ def train_one_epoch(model, optimizer, train_num, train_file, args, logger):
 
     avg_train_loss = np.mean(train_loss)
     return avg_train_loss
-    # avg_train_acc = np.mean(train_acc)
-    # logger.info('Epoch {} Average Loss {} Average Acc {}'.format(ep, avg_train_loss, avg_train_acc))
-    # loss_sum = tf.Summary(value=[tf.Summary.Value(tag="model/loss", simple_value=avg_train_loss), ])
-    # acc_sum = tf.Summary(value=[tf.Summary.Value(tag="model/acc", simple_value=avg_train_acc), ])
-    # writer.add_summary(loss_sum, epoch)
-    # writer.add_summary(acc_sum, epoch)
 
 
 def train(args):
@@ -92,14 +83,15 @@ def train(args):
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
+    scheduler = WarmupCosineSchedule(optimizer, args.warmup, (train_num // args.batch_train + 1) * args.epochs)
     # torch.backends.cudnn.benchmark = True
     max_acc, max_p, max_r, max_f, max_roc, max_prc, max_sum, max_epoch = np.zeros(8)
     FALSE, ROC, PRC = {}, {}, {}
     train_loss, valid_loss = [], []
     for ep in range(1, args.epochs + 1):
         logger.info('Training the model for epoch {}'.format(ep))
-        avg_loss = train_one_epoch(model, optimizer, train_num, train_file, args, logger)
+        avg_loss = train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, logger)
         train_loss.append(avg_loss)
         logger.info('Epoch {} AvgLoss {}'.format(ep, avg_loss))
 
@@ -133,7 +125,7 @@ def train(args):
             PRC = {'PRECISION': precision, 'RECALL': recall}
             torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.bin'))
 
-        scheduler.step(metrics=eval_metrics['f1'])
+        # scheduler.step(metrics=eval_metrics['f1'])
         random.shuffle(train_file)
 
     logger.info('Max Acc - {}'.format(max_acc))
