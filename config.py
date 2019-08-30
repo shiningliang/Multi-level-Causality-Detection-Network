@@ -22,7 +22,7 @@ class DefaultConfig(object):
         self.batch_train = 32
         self.batch_eval = 64
         self.epochs = 10
-        self.optim = 'AdamW'
+        self.optim = 'Adam'
         self.patience = 2
         self.period = 1000
         self.num_threads = 8
@@ -41,10 +41,11 @@ class DefaultConfig(object):
         self.n_kernels = [2, 3, 4]
         self.n_filter = 50
         self.kmax_pooling = 2
+        self.window_size = 15
         self.n_class = 2
 
         self.task = 'training'
-        self.model = 'MCDN'
+        self.model = 'DRNN'
         self.train_file = 'altlex_train.tsv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'

@@ -63,7 +63,7 @@ def parse_args():
                                 help='dev batch size')
     train_settings.add_argument('--epochs', type=int, default=10,
                                 help='train epochs')
-    train_settings.add_argument('--optim', default='AdamW',
+    train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
     train_settings.add_argument('--patience', type=int, default=2,
                                 help='num of epochs for train patients')
@@ -115,9 +115,9 @@ def parse_args():
                                 help='dpcnn block size (default: 3)')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='training',
+    path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='MCDN',
+    path_settings.add_argument('--model', default='TextCNN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
@@ -219,14 +219,14 @@ def train(args, file_paths):
     best_sum = -1
     for i in range(1, args.multi + 1):
         logger.info('Initialize the model...')
-        model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+        # model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
         # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
         #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).
         #             to(device=args.device)
         # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
         #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-        # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
-        #                 args.is_sinusoid, args.dropout, logger).to(device=args.device)
+        model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
+                        args.is_sinusoid, args.dropout, logger).to(device=args.device)
         # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
         #                     args.dropout, logger).to(device=args.device)
         # model = DPCNN(token_embeddings, args, logger).to(device=args.device)

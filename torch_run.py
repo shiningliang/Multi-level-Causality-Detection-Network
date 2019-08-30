@@ -82,7 +82,6 @@ def train(args):
     model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     lr = args.lr
     optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr, weight_decay=args.weight_decay)
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', 0.5, patience=args.patience, verbose=True)
     scheduler = WarmupCosineSchedule(optimizer, args.warmup, (train_num // args.batch_train + 1) * args.epochs)
     # torch.backends.cudnn.benchmark = True

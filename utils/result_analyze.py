@@ -87,7 +87,7 @@ if __name__ == "__main__":
     training_set = set(training_all_alt)
     boot_set = set(boot_all_alt)
 
-    error_path = '../outputs/training/MCDN/results/FALSE_valid.json'
+    error_path = '../outputs/bootstrapped/MCDN/results/FALSE_valid.json'
     with open(error_path, 'r') as fh:
         error_meta = json.load(fh)
     test_fp_alt, test_fn_alt, test_all_alt, ids = gen_test(test_path, error_meta)
