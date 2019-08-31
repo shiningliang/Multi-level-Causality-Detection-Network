@@ -12,9 +12,9 @@ class DRNN(nn.Module):
         n_dict, n_emb = token_embeddings.shape
         self.rnn_type = "GRU"
         self.word_embedding = nn.Embedding(n_dict, n_emb, padding_idx=0)
-        self.forward_rnn = RNN(n_emb, config.n_hidden, batch_first=True, rnn_type=self.rnn_type)
+        self.forward_rnn = RNN(n_emb, config.n_hidden, 1, batch_first=True, rnn_type=self.rnn_type)
         # if config.DRNN.bidirectional:
-        self.backward_rnn = RNN(n_emb, config.n_hidden, batch_first=True, rnn_type=self.rnn_type)
+        self.backward_rnn = RNN(n_emb, config.n_hidden, 1, batch_first=True, rnn_type=self.rnn_type)
         self.window_size = config.window_size
         self.dropout = torch.nn.Dropout(p=config.dropout['layer'])
         self.hidden_dimension = config.n_hidden * 2
@@ -42,11 +42,12 @@ class DRNN(nn.Module):
         return params
 
     def get_embedding(self, batch, pad_shape=None, pad_value=0):
+        # mask = torch.tensor(batch).gt(0).float()
+        mask = torch.where(batch > 0, torch.full_like(batch, 1), batch).float()
         if pad_shape is not None:
             batch = torch.nn.functional.pad(batch, pad_shape, mode='constant', value=pad_value)
         embedding = self.word_embedding(batch)
         # length = batch[cDataset.DOC_TOKEN_LEN].to(self.config.device)
-        mask = torch.tensor(batch).gt(0).float()
         return embedding, mask
 
     def forward(self, x, x_pre, x_alt, x_cur, seq_lens):

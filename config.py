@@ -29,7 +29,7 @@ class DefaultConfig(object):
         self.max_len = {'full': 128, 'pre': 64, 'alt': 8, 'cur': 64}
         self.w2v_type = 'wiki'
         self.n_emb = 300
-        self.n_hidden = 64
+        self.n_hidden = 300
         self.n_layer = 2
         self.n_block = 4
         self.n_head = 4
@@ -41,7 +41,7 @@ class DefaultConfig(object):
         self.n_kernels = [2, 3, 4]
         self.n_filter = 50
         self.kmax_pooling = 2
-        self.window_size = 15
+        self.window_size = 10
         self.n_class = 2
 
         self.task = 'training'

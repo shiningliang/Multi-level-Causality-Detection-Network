@@ -41,7 +41,7 @@ class SelfAttentive(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
         self.decoder.bias.data.fill_(0)
 
-    def forward(self, x, seq_lens):
+    def forward(self, x, x_pre, x_alt, x_cur, seq_lens):
         x_emb = self.word_embedding(x)
         sorted_seq_lens, indices = torch.sort(seq_lens, dim=0, descending=True)
         _, desorted_indices = torch.sort(indices, descending=False)
@@ -59,10 +59,10 @@ class SelfAttentive(nn.Module):
         for i in range(x.size(0)):
             H = depacked_output[i, :lens[i], :]
             s1 = self.S1(H)
-            s2 = self.S2(functional.tanh(s1))
+            s2 = self.S2(torch.tanh(s1))
 
             # Attention Weights and Embedding
-            A = functional.softmax(s2.t())
+            A = functional.softmax(s2.t(), dim=-1)
             M = torch.mm(A, H)
             BM[i, :] = M.view(-1)
 

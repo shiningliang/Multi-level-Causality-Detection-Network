@@ -79,7 +79,7 @@ def parse_args():
                                 help='type of the embeddings')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--n_hidden', type=int, default=64,
+    model_settings.add_argument('--n_hidden', type=int, default=300,
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--n_layer', type=int, default=2,
                                 help='num of layers')
@@ -111,13 +111,15 @@ def parse_args():
                                 help='class size (default: 2)')
     model_settings.add_argument('--kmax_pooling', type=int, default=2,
                                 help='top-K max pooling')
+    model_settings.add_argument('--window_size', type=int, default=10,
+                                help='size of DRNN window')
     model_settings.add_argument('--dp_blocks', type=int, default=3,
                                 help='dpcnn block size (default: 3)')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='TextCNN',
+    path_settings.add_argument('--model', default='DRNN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
@@ -219,14 +221,14 @@ def train(args, file_paths):
     best_sum = -1
     for i in range(1, args.multi + 1):
         logger.info('Initialize the model...')
-        # model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+        model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
         # model = TCN(token_embeddings, args.max_len['full'], args.n_class, n_channel=[args.n_filter] * args.n_level,
         #             n_kernel=args.n_kernel, n_block=args.n_block, n_head=args.n_head, dropout=dropout, logger=logger).
         #             to(device=args.device)
         # model = BiGRU(token_embeddings, args.max_len['full'], args.n_class, args.n_hidden, args.n_layer, args.n_block,
         #               args.n_head, args.is_sinusoid, args.is_ffn, dropout, logger).to(device=args.device)
-        model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
-                        args.is_sinusoid, args.dropout, logger).to(device=args.device)
+        # model = TextCNN(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter, args.is_pos,
+        #                 args.is_sinusoid, args.dropout, logger).to(device=args.device)
         # model = TextCNNDeep(token_embeddings, args.max_len, args.n_class, args.n_kernels, args.n_filter,
         #                     args.dropout, logger).to(device=args.device)
         # model = DPCNN(token_embeddings, args, logger).to(device=args.device)

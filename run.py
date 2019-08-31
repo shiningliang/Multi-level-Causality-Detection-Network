@@ -2,9 +2,9 @@ import os
 import argparse
 import logging
 import ujson as json
-import numpy as np
+import pickle as pkl
 import tensorflow as tf
-from preprocess import run_prepare
+from preprocess.tf_preprocess import run_prepare
 from models.SelfAttentiveSentenceEmbedding import SelfAttentive
 from utils.tf_util import get_record_parser, evaluate_batch, get_batch_dataset, get_dataset, print_metrics
 import warnings
@@ -64,7 +64,7 @@ def parse_args():
                                 help='Batch size of data set shuffle')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--max_len', type=int, default=200,
+    model_settings.add_argument('--max_len', type=int, default=128,
                                 help='max sentence length')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
@@ -84,13 +84,15 @@ def parse_args():
                                 help='positive example weight')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='bootstrapped',
+    path_settings.add_argument('--task', default='training',
                                help='the task name')
+    path_settings.add_argument('--model', default='SASE',
+                               help='the model name')
     path_settings.add_argument('--raw_dir', default='data/raw_data',
                                help='the dir to store raw data')
-    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train.tsv',
                                help='the train file name')
-    path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
+    path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
                                help='the valid file name')
     path_settings.add_argument('--test_file', default='altlex_gold.tsv',
                                help='the test file name')
@@ -113,7 +115,8 @@ def train(args, file_paths, max_len):
     logger = logging.getLogger('altlex')
     logger.info('Loading token embeddings...')
     with open(file_paths.token_emb_file, 'rb') as fh:
-        token_embeddings = np.array(json.load(fh), dtype=np.float32)
+        token_embeddings = pkl.load(fh)
+    fh.close()
     logger.info('Loading train eval file...')
     with open(file_paths.train_eval_file, 'r') as fh:
         train_eval_file = json.load(fh)
@@ -127,8 +130,7 @@ def train(args, file_paths, max_len):
         valid_meta = json.load(fh)
     train_total = train_meta['total']
     valid_total = valid_meta['total']
-    logger.info('Num of train examples {}'.format(train_total))
-    logger.info('Num of test examples {}'.format(valid_total))
+    logger.info('Num of train examples {} test examples {}'.format(train_total, valid_total))
 
     parser = get_record_parser(max_len)
     train_dataset = get_batch_dataset(file_paths.train_record_file, parser, args)
@@ -194,12 +196,12 @@ def train(args, file_paths, max_len):
                     f1_save = f1
                     patience = 0
                 sess.run(tf.assign(model.lr, tf.constant(lr, dtype=tf.float32)))
-                max_acc = max(valid_metrics['acc'], max_acc)
-                max_p = max(valid_metrics['precision'], max_p)
-                max_r = max(valid_metrics['recall'], max_r)
-                max_f = max(valid_metrics['f1'], max_f)
                 valid_sum = valid_metrics['precision'] + valid_metrics['recall'] + valid_metrics['f1']
                 if valid_sum > max_sum:
+                    max_acc = max(valid_metrics['acc'], max_acc)
+                    max_p = max(valid_metrics['precision'], max_p)
+                    max_r = max(valid_metrics['recall'], max_r)
+                    max_f = max(valid_metrics['f1'], max_f)
                     max_sum = valid_sum
                     max_epoch = step // args.checkpoint
                     # filename = os.path.join(args.model_dir, "model_{}.ckpt".format(global_step))
@@ -255,9 +257,10 @@ def run():
             self.shape_meta = os.path.join(args.processed_dir, 'shape_meta.json')
 
             self.corpus_file = os.path.join(args.processed_dir, 'corpus.txt')
-            self.w2v_file = './data/processed_data/wiki_en_model.pkl'
-            self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.json')
+            self.w2v_file = './data/processed_data/wiki.en.pkl'
+            self.token_emb_file = os.path.join(args.processed_dir, 'token_emb.pkl')
             self.token2id_file = os.path.join(args.processed_dir, 'token2id.json')
+            self.id2token_file = os.path.join(args.processed_dir, 'id2token.json')
 
     file_paths = FilePaths()
     # max_seq_len, index_dim = 0, 0

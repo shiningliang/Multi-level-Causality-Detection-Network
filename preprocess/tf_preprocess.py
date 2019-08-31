@@ -210,9 +210,13 @@ def save(filename, obj, message=None):
         if message == 'corpus':
             with open(filename, 'w', encoding='utf8') as fh:
                 fh.writelines([line + '\n' for line in obj])
+        elif message == 'embeddings':
+            with open(filename, 'wb') as fh:
+                pkl.dump(obj, fh)
         else:
             with open(filename, 'w', encoding='utf8') as fh:
                 json.dump(obj, fh)
+        fh.close()
 
 
 def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
@@ -347,7 +351,7 @@ def run_prepare(config, flags):
     if config.build:
         corpus_dict = build_dict(train_corpus + valid_corpus + test_corpus)
         token_emb_mat, token2id = get_embedding('word', corpus_dict, flags.w2v_file, config.n_emb)
-        save(flags.token_emb_file, token_emb_mat, message='token embedding matrix')
+        save(flags.token_emb_file, token_emb_mat, message='embeddings')
         save(flags.token2id_file, token2id, message='word2index')
         types = ['train', 'test']
         labels = [train_labels, test_labels]

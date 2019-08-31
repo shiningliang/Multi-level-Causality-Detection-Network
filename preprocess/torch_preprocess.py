@@ -289,7 +289,7 @@ def save(filename, obj, message=None):
 def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
 
-    token2id = {'<NULL>': 0, '<OOV>': 1}
+    token2id = {'<NULL>': 0, '<OOV>': 1, '<LEARN>': 2}
     if emb_file is not None:
         assert vec_size is not None
         with open(emb_file, 'rb') as fin:
@@ -307,7 +307,7 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
         # oov_tokens = oov_tokens.difference(combined_tokens)
         # token2id = {'<NULL>': 0, '<OOV>': 1}
         # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
-        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + len(token2id), vec_size])
         for token in filtered_tokens:
             token2id[token] = len(token2id)
             embedding_mat[token2id[token]] = trained_embeddings[token]
@@ -331,7 +331,7 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
                                                                               combined,
                                                                               len(oov_tokens)))
     else:
-        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
+        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + len(token2id), vec_size))
         embedding_mat[0] = np.zeros(vec_size)
         embedding_mat[1] = np.zeros(vec_size)
         for token in corpus_dict:

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as functional
 from torch.autograd import Variable
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc, precision_recall_curve
 
 
 def get_batch(samples, device):
@@ -77,7 +77,7 @@ def compute_loss(logits, target, length, weight):
 def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_type, logger):
     losses = []
     fp, fn = [], []
-    causality_preds, causality_labels = [], []
+    causality_preds, causality_scores, causality_labels = [], [], []
     metrics = {}
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
@@ -85,7 +85,7 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
         end_idx = start_idx + batch_size
         tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(eval_file[start_idx:end_idx],
                                                                                            device)
-        cau_outputs, penal, weights = model(tokens, seq_lens)
+        cau_outputs, penal, weights = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         cau_outputs = cau_outputs.detach()
         if is_fc:
             criterion = FocalLoss(gamma=2, alpha=0.75)
@@ -94,10 +94,12 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
         loss = criterion(cau_outputs, cau_labels)
         losses.append(loss.item())
         cau_preds = torch.max(cau_outputs.cpu(), 1)[1].numpy()
+        cau_scores = cau_outputs.cpu()[:, 1].numpy()
         cau_labels = cau_labels.cpu().numpy()
         causality_preds += cau_preds.tolist()
+        causality_scores += cau_scores.tolist()
         causality_labels += cau_labels.tolist()
-        if data_type == 'valid':
+        if data_type == 'valid' or data_type == 'eval':
             for pred, label, eid in zip(cau_preds, cau_labels, eids):
                 if label == 1 and pred == 0:
                     fn.append(eid)
@@ -109,18 +111,16 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
     metrics['precision'] = precision_score(causality_labels, causality_preds)
     metrics['recall'] = recall_score(causality_labels, causality_preds)
     metrics['f1'] = f1_score(causality_labels, causality_preds)
-    if data_type == 'valid':
+    fpr, tpr, _ = roc_curve(causality_labels, causality_scores)
+    (precisions, recalls, _) = precision_recall_curve(causality_labels, causality_scores)
+    metrics['auc_roc'] = auc(fpr, tpr)
+    metrics['auc_prc'] = auc(recalls, precisions)
+    if data_type == 'valid' or data_type == 'eval':
         metrics['fp'] = fp
         metrics['fn'] = fn
     logger.info('Full confusion matrix')
     logger.info(confusion_matrix(causality_labels, causality_preds))
-    return metrics
-    # tn, fp, fn, tp = confusion_matrix(auc_ref, auc_pre).ravel()
-    # loss_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/loss'.format(data_type), simple_value=metrics['loss']), ])
-    # acc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/acc'.format(data_type), simple_value=metrics['acc']), ])
-    # auc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/roc'.format(data_type), simple_value=metrics['roc']), ])
-    # prc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/prc'.format(data_type), simple_value=metrics['prc']), ])
-    # return metrics, (loss_sum, acc_sum, auc_sum, prc_sum)
+    return metrics, fpr, tpr, precisions, recalls
 
 
 class FocalLoss(torch.nn.Module):
