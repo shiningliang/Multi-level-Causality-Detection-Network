@@ -83,7 +83,9 @@ if __name__ == "__main__":
     test_path = '../data/raw_data/altlex_gold.tsv'
 
     training_all_alt = gen_train(training_path)
+    tr_total = len(training_all_alt)
     boot_all_alt = gen_train(boot_path)
+    bt_total = len(boot_all_alt)
     training_set = set(training_all_alt)
     boot_set = set(boot_all_alt)
 
@@ -91,6 +93,9 @@ if __name__ == "__main__":
     with open(error_path, 'r') as fh:
         error_meta = json.load(fh)
     test_fp_alt, test_fn_alt, test_all_alt, ids = gen_test(test_path, error_meta)
+    te_total = len(test_all_alt)
+    fn_total = len(test_fn_alt)
+    fp_total = len(test_fp_alt)
     test_set = set(test_all_alt)
     not_in_training = test_set.difference(test_set.intersection(training_set))
     not_in_boot = test_set.difference(test_set.intersection(boot_set))
@@ -104,24 +109,40 @@ if __name__ == "__main__":
     tec = collections.Counter(test_all_alt)
     print('Top 5 in Train: ', tc.most_common(5))
     tck, tcv = [], []
-    for k, v in tc.most_common(20):
+    tc_acu = 0
+    for k, v in tc.most_common(10):
         tck.append(k)
         tcv.append(v)
+        tc_acu += v
+    print(tc_acu / tr_total)
+
     print('Top 5 in Test: ', tec.most_common(5))
     tek, tev = [], []
-    for k, v in tec.most_common(20):
+    te_acu = 0
+    for k, v in tec.most_common(10):
         tek.append(k)
         tev.append(v)
+        te_acu += v
+    print(te_acu / te_total)
+
     print('Top 5 in FP: ', fpc.most_common(5))
     fpk, fpv = [], []
-    for k, v in fpc.most_common(20):
+    fp_acu = 0
+    for k, v in fpc.most_common(10):
         fpk.append(k)
         fpv.append(v)
+        fp_acu += v
+    print(fp_acu / fp_total)
+
     print('Top 5 in FN: ', fnc.most_common(5))
     fnk, fnv = [], []
-    for k, v in fnc.most_common(20):
+    fn_acu = 0
+    for k, v in fnc.most_common(10):
         fnk.append(k)
         fnv.append(v)
+        fn_acu += v
+    print(fn_acu / fn_total)
+
     print(ids)
     df = pd.DataFrame({'train_word': tck, 'train_freq': tcv, 'test_word': tek, 'test_freq': tev,
                        'fp_word': fpk, 'fp_freq': fpv, 'fn_word': fnk, 'fn_freq': fnv})

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import ujson as json
 import seaborn
 import os
+import time
 import pandas as pd
 seaborn.set_context(context="talk")
 plt.switch_backend('agg')
@@ -129,12 +130,22 @@ def evaluate_batch(model, data_num, batch_size, eval_file, device, is_fc, data_t
     logger.info('Full confusion matrix')
     logger.info(confusion_matrix(causality_labels, causality_preds))
     return metrics, fpr, tpr, precisions, recalls
-    # tn, fp, fn, tp = confusion_matrix(auc_ref, auc_pre).ravel()
-    # loss_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/loss'.format(data_type), simple_value=metrics['loss']), ])
-    # acc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/acc'.format(data_type), simple_value=metrics['acc']), ])
-    # auc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/roc'.format(data_type), simple_value=metrics['roc']), ])
-    # prc_sum = tf.Summary(value=[tf.Summary.Value(tag='{}/prc'.format(data_type), simple_value=metrics['prc']), ])
-    # return metrics, (loss_sum, acc_sum, auc_sum, prc_sum)
+
+
+def case_batch(model, data_num, batch_size, eval_file, device):
+    model.eval()
+    for batch_idx, batch in enumerate(range(0, data_num, batch_size)):
+        start_idx = batch
+        end_idx = start_idx + batch_size
+        tokens, tokens_pre, tokens_alt, tokens_cur, cau_labels, seq_lens, eids = get_batch(eval_file[start_idx:end_idx],
+                                                                                           device)
+        cau_outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
+        cau_outputs = cau_outputs.detach()
+
+        m = torch.nn.Softmax(dim=-1)
+        cau_scores = m(cau_outputs).cpu().numpy()
+
+    return cau_scores
 
 
 class FocalLoss(torch.nn.Module):
@@ -253,4 +264,5 @@ def save_loss(train_loss, valid_loss, path):
 
 def save_metrics(me_array, path):
     df = pd.DataFrame(me_array, columns=['acc', 'precision', 'recall', 'f1', 'roc', 'prc', 'epoch'])
-    df.to_csv(os.path.join(path, 'metrics.csv'), index=False)
+    ts = time.strftime("%Y-%m-%d-%H%M%S", time.localtime())
+    df.to_csv(os.path.join(path, ts + '_metrics.csv'), index=False)

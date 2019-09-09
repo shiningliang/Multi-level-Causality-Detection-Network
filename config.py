@@ -5,10 +5,11 @@ import os.path as op
 
 class DefaultConfig(object):
     def __init__(self):
-        self.prepare = False
+        self.prepare = True
         self.build = False
-        self.train = True
+        self.train = False
         self.evaluate = False
+        self.case = False
         self.gpu = '0'
         self.seed = 23333
 
@@ -29,7 +30,7 @@ class DefaultConfig(object):
         self.max_len = {'full': 128, 'pre': 64, 'alt': 8, 'cur': 64}
         self.w2v_type = 'wiki'
         self.n_emb = 300
-        self.n_hidden = 300
+        self.n_hidden = 64
         self.n_layer = 2
         self.n_block = 4
         self.n_head = 4
@@ -44,9 +45,9 @@ class DefaultConfig(object):
         self.window_size = 10
         self.n_class = 2
 
-        self.task = 'training'
-        self.model = 'DRNN'
-        self.train_file = 'altlex_train.tsv'
+        self.task = 'bootstrapped'
+        self.model = 'MCDN'
+        self.train_file = 'altlex_train_bootstrapped.tsv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'
         self.transfer_file1 = '2010_random_filtered.json'

@@ -1,4 +1,5 @@
 import os
+import time
 import argparse
 import logging
 import random
@@ -15,7 +16,7 @@ from models.torch_TextCNN import TextCNN
 from models.torch_TextRNN import TextRNN
 from models.torch_DPCNN import TextCNNDeep
 from models.tencent_DPCNN import DPCNN
-from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, save_loss, save_metrics
+from utils.torch_util import get_batch, evaluate_batch, case_batch, FocalLoss, draw_att, draw_curve, save_loss, save_metrics
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -33,9 +34,9 @@ def parse_args():
                         help='train the model')
     parser.add_argument('--evaluate', action='store_true',
                         help='evaluate the model on dev set')
-    parser.add_argument('--predict', action='store_true',
-                        help='predict the answers for test set with trained model')
-    parser.add_argument('--multi', type=str, default=5,
+    parser.add_argument('--case', action='store_true',
+                        help='case study')
+    parser.add_argument('--multi', type=str, default=1,
                         help='times for experiment')
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
@@ -61,7 +62,7 @@ def parse_args():
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=10,
+    train_settings.add_argument('--epochs', type=int, default=20,
                                 help='train epochs')
     train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
@@ -79,7 +80,7 @@ def parse_args():
                                 help='type of the embeddings')
     model_settings.add_argument('--n_emb', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--n_hidden', type=int, default=300,
+    model_settings.add_argument('--n_hidden', type=int, default=64,
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--n_layer', type=int, default=2,
                                 help='num of layers')
@@ -105,7 +106,7 @@ def parse_args():
                                 help='kernels size (default: 2, 3, 4)')
     model_settings.add_argument('--n_level', type=int, default=6,
                                 help='# of levels (default: 10)')
-    model_settings.add_argument('--n_filter', type=int, default=100,
+    model_settings.add_argument('--n_filter', type=int, default=50,
                                 help='number of hidden units per layer (default: 256)')
     model_settings.add_argument('--n_class', type=int, default=2,
                                 help='class size (default: 2)')
@@ -119,7 +120,7 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='DRNN',
+    path_settings.add_argument('--model', default='MCDNS',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
@@ -278,7 +279,8 @@ def train(args, file_paths):
                 if max_sum > best_sum:
                     best_sum = max_sum
                     is_best = True
-                    torch.save(model.state_dict(), os.path.join(args.model_dir, 'model.bin'))
+                    ts = time.strftime("%Y-%m-%d-%H%M%S", time.localtime())
+                    torch.save(model.state_dict(), os.path.join(args.model_dir, ts + '_model.bin'))
 
             random.shuffle(train_file)
 
@@ -338,7 +340,7 @@ def evaluate(args, file_paths):
     # model = torch.load(os.path.join(args.model_dir, 'model.pth'))
     args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
-    model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
+    model.load_state_dict(torch.load(os.path.join(args.model_dir, '2019-09-03-173141_model.bin')))
 
     eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
                                                                args.device, args.is_fc, 'eval', logger)
@@ -362,6 +364,36 @@ def evaluate(args, file_paths):
     dump_json(os.path.join(args.result_dir, 'ROC_transfer.json'), ROC)
     dump_json(os.path.join(args.result_dir, 'PRC_transfer.json'), PRC)
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
+
+
+def case(args, file_path):
+    logger = logging.getLogger('Causality')
+    logger.info('Loading test file...')
+    with open(file_path.test_record_file, 'rb') as fh:
+        test_file = pkl.load(fh)
+    fh.close()
+    logger.info('Loading test meta...')
+    test_meta = load_json(file_path.test_meta)
+    logger.info('Loading id to token file...')
+    id2token_file = load_json(file_path.id2token_file)
+    logger.info('Loading token embeddings...')
+    with open(file_path.token_emb_file, 'rb') as fh:
+        token_embeddings = pkl.load(fh)
+    fh.close()
+    test_num = test_meta['total']
+    logger.info('Loading shape meta...')
+    logger.info('Num test data {}'.format(test_num))
+
+    args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+    model.load_state_dict(torch.load(os.path.join(args.model_dir, '2019-09-03-164417_model.bin')))
+
+    pred_scores = case_batch(model, test_num, args.batch_eval, test_file, args.device)
+    print(pred_scores)
+
+    if args.model == 'MCDN' or args.model == 'TB':
+        draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+                 args.pics_dir, args.n_block, args.n_head, logger)
 
 
 def dump_json(file_path, obj):
@@ -457,6 +489,8 @@ def run():
         train(args, file_paths)
     if args.evaluate:
         evaluate(args, file_paths)
+    if args.case:
+        case(args, file_paths)
 
 
 if __name__ == '__main__':

@@ -289,7 +289,8 @@ def save(filename, obj, message=None):
 def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
 
-    token2id = {'<NULL>': 0, '<OOV>': 1, '<LEARN>': 2}
+    # token2id = {'<NULL>': 0, '<OOV>': 1, '<LEARN>': 2}
+    token2id = {'<NULL>': 0, '<OOV>': 1}
     if emb_file is not None:
         assert vec_size is not None
         with open(emb_file, 'rb') as fin:

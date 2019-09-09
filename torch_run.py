@@ -9,7 +9,7 @@ from pytorch_transformers import WarmupCosineSchedule
 from config import opt
 from preprocess.torch_preprocess import run_prepare
 import models
-from utils.torch_util import get_batch, evaluate_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_loss
+from utils.torch_util import get_batch, evaluate_batch, case_batch, FocalLoss, draw_att, draw_curve, load_json, dump_json, save_loss
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -197,6 +197,36 @@ def evaluate(args):
     draw_curve(ROC['FPR'], ROC['TPR'], PRC['PRECISION'], PRC['RECALL'], args.pics_dir)
 
 
+def case(args):
+    logger = logging.getLogger('Causality')
+    logger.info('Loading test file...')
+    with open(args.test_record_file, 'rb') as fh:
+        test_file = pkl.load(fh)
+    fh.close()
+    logger.info('Loading test meta...')
+    test_meta = load_json(args.test_meta)
+    logger.info('Loading id to token file...')
+    id2token_file = load_json(args.id2token_file)
+    logger.info('Loading token embeddings...')
+    with open(args.token_emb_file, 'rb') as fh:
+        token_embeddings = pkl.load(fh)
+    fh.close()
+    test_num = test_meta['total']
+    logger.info('Loading shape meta...')
+    logger.info('Num test data {}'.format(test_num))
+
+    args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
+    model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
+    model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
+
+    pred_scores = case_batch(model, test_num, args.batch_eval, test_file, args.device)
+    print(pred_scores)
+
+    if args.model == 'MCDN' or args.model == 'TB':
+        draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+                 args.pics_dir, args.n_block, args.n_head, logger)
+
+
 def run(**kwargs):
     """
     Prepares and runs the whole system.
@@ -233,6 +263,8 @@ def run(**kwargs):
         train(opt)
     if opt.evaluate:
         evaluate(opt)
+    if opt.case:
+        case(opt)
 
 
 if __name__ == '__main__':

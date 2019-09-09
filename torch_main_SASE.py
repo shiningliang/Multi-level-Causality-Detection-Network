@@ -110,7 +110,7 @@ def parse_args():
                                 help='top-K max pooling')
 
     path_settings = parser.add_argument_group('path settings')
-    path_settings.add_argument('--task', default='training',
+    path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
     path_settings.add_argument('--model', default='SASE',
                                help='the model name')
@@ -147,8 +147,8 @@ def train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, lo
     model.train()
     train_loss = []
     n_batch_loss = 0
-    entropy_loss = torch.nn.CrossEntropyLoss()
-    # weight = torch.from_numpy(np.array([0.2, 0.8], dtype=np.float32)).to(args.device)
+    weight = torch.from_numpy(np.array([0.3, 0.7], dtype=np.float32)).to(args.device)
+    entropy_loss = torch.nn.CrossEntropyLoss(weight)
     for batch_idx, batch in enumerate(range(0, train_num, args.batch_train)):
         start_idx = batch
         end_idx = start_idx + args.batch_train
@@ -257,7 +257,7 @@ def train(args, file_paths):
             logger.info('Valid F1 - {}'.format(eval_metrics['f1']))
             logger.info('Valid AUCROC - {}'.format(eval_metrics['auc_roc']))
             logger.info('Valid AUCPRC - {}'.format(eval_metrics['auc_prc']))
-            valid_sum = eval_metrics['auc_roc'] + eval_metrics['auc_prc'] + eval_metrics['f1']
+            valid_sum = eval_metrics['acc'] + eval_metrics['precision'] + eval_metrics['recall'] + eval_metrics['f1']
             if valid_sum > max_sum:
                 max_acc = eval_metrics['acc']
                 max_p = eval_metrics['precision']
