@@ -28,7 +28,7 @@ def train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, lo
         optimizer.zero_grad()
         outputs = model(tokens, tokens_pre, tokens_alt, tokens_cur, seq_lens)
         if args.is_fc:
-            criterion = FocalLoss(gamma=2, alpha=0.75)
+            criterion = FocalLoss(gamma=4, alpha=0.75)
         else:
             criterion = torch.nn.CrossEntropyLoss(weight)
         loss = criterion(outputs, cau_labels)
@@ -173,7 +173,7 @@ def evaluate(args):
     model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     model.load_state_dict(torch.load(os.path.join(args.model_dir, 'model.bin')))
 
-    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
+    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, test_num, args.batch_eval, test_file,
                                                                args.device, args.is_fc, 'eval', logger)
     logger.info('Eval Loss - {}'.format(eval_metrics['loss']))
     logger.info('Eval Acc - {}'.format(eval_metrics['acc']))
@@ -183,9 +183,9 @@ def evaluate(args):
     logger.info('Eval AUCROC - {}'.format(eval_metrics['auc_roc']))
     logger.info('Eval AUCPRC - {}'.format(eval_metrics['auc_prc']))
 
-    if args.model == 'MCDN' or args.model == 'TB':
-        draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
-                 args.pics_dir, args.n_block, args.n_head, logger)
+    # if args.model == 'MCDN' or args.model == 'TB':
+    #     draw_att(model, test_num, args.batch_eval, test_file, args.device, id2token_file,
+    #              args.pics_dir, args.n_block, args.n_head, logger)
 
     FALSE = {'FP': eval_metrics['fp'], 'FN': eval_metrics['fn']}
     ROC = {'FPR': fpr, 'TPR': tpr}

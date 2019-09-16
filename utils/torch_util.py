@@ -182,6 +182,38 @@ class FocalLoss(torch.nn.Module):
             return loss.sum()
 
 
+class NeuralFocal(torch.nn.Module):
+    """Softmax focal loss
+    references: Focal Loss for Dense Object Detection
+                https://github.com/Hsuxu/FocalLoss-PyTorch
+    """
+
+    def __init__(self, label_size, gamma=2.0, alpha=0.75, epsilon=1.e-9):
+        super(NeuralFocal, self).__init__()
+        self.num_cls = label_size
+        self.gamma = gamma
+        self.alpha = alpha
+        self.epsilon = epsilon
+
+    def forward(self, logits, target):
+        """
+        Args:
+            logits: model's output, shape of [batch_size, num_cls]
+            target: ground truth labels, shape of [batch_size]
+        Returns:
+            shape of [batch_size]
+        """
+        idx = target.view(-1, 1).long()
+        one_hot_key = torch.zeros(idx.size(0), self.num_cls,
+                                  dtype=torch.float,
+                                  device=idx.device)
+        one_hot_key = one_hot_key.scatter_(1, idx, 1)
+        logits = torch.softmax(logits, dim=-1)
+        loss = -self.alpha * one_hot_key * torch.pow((1 - logits), self.gamma) * (logits + self.epsilon).log()
+        loss = loss.sum(1)
+        return loss.mean()
+
+
 def draw_att(model, data_num, batch_size, test_file, device, id2token_file, pics_dir, nblock, nhead, logger):
     model.eval()
     for batch_idx, batch in enumerate(range(0, data_num, batch_size)):

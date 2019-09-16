@@ -131,9 +131,6 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
     seq_len = []
     for label, eng, sim in zip(labels, seg_eng_filtered, seg_sim_filtered):
         total += 1
-        # for idx, seg in enumerate(eng):
-        #     if len(seg) == 0:
-        #         eng[idx] = ['<OOV>']
         pre, mid, cur, flag = check_null(eng)
         if flag:
             print(total)
@@ -144,17 +141,8 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
                          'tokens_cur': cur,
                          'cau_label': label})
         seq_len.append(len(pre + mid + cur))
-        # examples.append({'eid': total,
-        #                  'tokens': eng[0] + eng[1] + eng[2],
-        #                  'tokens_pre': eng[0],
-        #                  'tokens_alt': eng[1],
-        #                  'tokens_cur': eng[2],
-        #                  'cau_label': label})
 
         total += 1
-        # for idx, seg in enumerate(sim):
-        #     if len(seg) == 0:
-        #         sim[idx] = ['<OOV>']
         pre, mid, cur, flag = check_null(sim)
         if flag:
             print(total)
@@ -165,12 +153,6 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
                          'tokens_cur': cur,
                          'cau_label': label})
         seq_len.append(len(pre + mid + cur))
-        # examples.append({'eid': total,
-        #                  'tokens': sim[0] + sim[1] + sim[2],
-        #                  'tokens_pre': sim[0],
-        #                  'tokens_alt': sim[1],
-        #                  'tokens_cur': sim[2],
-        #                  'cau_label': label})
 
     if is_build:
         sentences = []

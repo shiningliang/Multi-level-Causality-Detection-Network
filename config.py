@@ -7,8 +7,8 @@ class DefaultConfig(object):
     def __init__(self):
         self.prepare = True
         self.build = False
-        self.train = False
-        self.evaluate = False
+        self.train = True
+        self.evaluate = True
         self.case = False
         self.gpu = '0'
         self.seed = 23333
