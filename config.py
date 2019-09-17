@@ -116,6 +116,8 @@ class DefaultConfig(object):
             self.w2v_file = './data/processed_data/glove.6B.pkl'
         elif self.w2v_type == 'glove840':
             self.w2v_file = './data/processed_data/glove.840B.pkl'
+        elif self.w2v_type == 'fastText':
+            self.w2v_file = './data/processed_data/fastText.pkl'
 
 
 opt = DefaultConfig()

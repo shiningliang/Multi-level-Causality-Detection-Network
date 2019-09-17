@@ -1,23 +1,12 @@
 import gensim
 from gensim.scripts import glove2word2vec
+from gensim.models import fasttext
 import os
 import shutil
 from sys import platform
 import pickle
-
-path = 'data/processed_data'
-
-google = os.path.join(path, 'GoogleNews-vectors-negative300.bin')
-model = gensim.models.KeyedVectors.load_word2vec_format(google, binary=True)
-# glove6B = os.path.join(path, 'glove.840B.bin')
-# model = gensim.models.KeyedVectors.load_word2vec_format(glove6B, binary=True)
-# model.save_word2vec_format(os.path.join(path, 'glove.840B.bin'), binary=True)
-
-word_weights = {}
-for word in model.vocab:
-    word_weights[word] = model[word]
-with open(os.path.join(path, 'google.news.pkl'), 'wb') as file:
-    pickle.dump(word_weights, file)
+import logging
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 # 计算行数，就是单词数
@@ -70,3 +59,22 @@ def load(filename):
 # load(glove_840B)
 # print(glove2word2vec.get_glove_info(glove_840B))
 # glove2word2vec.glove2word2vec(glove_840B, glove_840B_out)
+
+path = '../data/processed_data'
+
+# google = os.path.join(path, 'GoogleNews-vectors-negative300.bin')
+# model = gensim.models.KeyedVectors.load_word2vec_format(google, binary=True)
+
+# glove6B = os.path.join(path, 'glove.840B.bin')
+# model = gensim.models.KeyedVectors.load_word2vec_format(glove6B, binary=True)
+# model.save_word2vec_format(os.path.join(path, 'glove.840B.bin'), binary=True)
+
+fast = os.path.join(path, 'cc.en.300.bin')
+model = fasttext.load_facebook_vectors(fast)
+print(len(model.vocab))
+
+word_weights = {}
+for word in model.vocab:
+    word_weights[word] = model[word]
+with open(os.path.join(path, 'fastText.pkl'), 'wb') as file:
+    pickle.dump(word_weights, file)

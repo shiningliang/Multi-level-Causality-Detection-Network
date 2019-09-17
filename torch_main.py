@@ -36,7 +36,7 @@ def parse_args():
                         help='evaluate the model on dev set')
     parser.add_argument('--case', action='store_true',
                         help='case study')
-    parser.add_argument('--multi', type=str, default=1,
+    parser.add_argument('--multi', type=str, default=5,
                         help='times for experiment')
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
@@ -62,7 +62,7 @@ def parse_args():
                                 help='train batch size')
     train_settings.add_argument('--batch_eval', type=int, default=64,
                                 help='dev batch size')
-    train_settings.add_argument('--epochs', type=int, default=20,
+    train_settings.add_argument('--epochs', type=int, default=10,
                                 help='train epochs')
     train_settings.add_argument('--optim', default='Adam',
                                 help='optimizer type')
@@ -481,6 +481,8 @@ def run():
                 self.w2v_file = './data/processed_data/glove.6B.pkl'
             elif w2v_type == 'glove840':
                 self.w2v_file = './data/processed_data/glove.840B.pkl'
+            elif w2v_type == 'fastText':
+                self.w2v_file = './data/processed_data/fastText.pkl'
 
     file_paths = FilePaths(args.w2v_type)
     if args.prepare:
