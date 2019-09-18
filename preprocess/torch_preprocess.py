@@ -109,6 +109,8 @@ def preprocess_train(file_path, file_name, data_type, is_build=False):
     lines = open(data_path, 'r', encoding='ISO-8859-1').readlines()
     for line in lines:
         line = line.strip().split('\t')
+        if line[0] == 'label':
+            continue
         labels.append(int(line[0]))
         del line[0]
         if is_build:

@@ -76,5 +76,5 @@ def run_prepare(config, flags):
     #                                                                         'valid')
     df_val = preprocess_test(config.raw_dir, config.test_file, 'test', config.build)
     print(len(df_trn), len(df_val))
-    df_trn.to_csv(flags.train_file, index=False)
-    df_val.to_csv(flags.test_file, index=False)
+    df_trn.to_csv(flags.train_file, sep='\t', index=False)
+    df_val.to_csv(flags.test_file, sep='\t', index=False)

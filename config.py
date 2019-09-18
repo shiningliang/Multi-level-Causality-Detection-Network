@@ -7,8 +7,8 @@ class DefaultConfig(object):
     def __init__(self):
         self.prepare = True
         self.build = False
-        self.train = True
-        self.evaluate = True
+        self.train = False
+        self.evaluate = False
         self.case = False
         self.gpu = '0'
         self.seed = 23333
@@ -45,9 +45,9 @@ class DefaultConfig(object):
         self.window_size = 10
         self.n_class = 2
 
-        self.task = 'bootstrapped'
+        self.task = 'training_8'
         self.model = 'MCDN'
-        self.train_file = 'altlex_train_bootstrapped.tsv'
+        self.train_file = 'train_training_8.csv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'
         self.transfer_file1 = '2010_random_filtered.json'

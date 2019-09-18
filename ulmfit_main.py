@@ -101,7 +101,7 @@ def parse_args():
                                help='the task name')
     path_settings.add_argument('--model', default='ULMFIT',
                                help='the model name')
-    path_settings.add_argument('--train_file', default='altlex_train.tsv',
+    path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
     path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
@@ -307,7 +307,7 @@ def run():
     class FilePaths(object):
         def __init__(self):
             # 运行记录文件
-            self.train_file = os.path.join(args.processed_dir, 'train_training.csv')
+            self.train_file = os.path.join(args.processed_dir, 'train_boot.csv')
             self.valid_file = os.path.join(args.processed_dir, 'valid.csv')
             self.test_file = os.path.join(args.processed_dir, 'test.csv')
             # 计数文件

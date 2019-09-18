@@ -36,7 +36,7 @@ def parse_args():
                         help='evaluate the model on dev set')
     parser.add_argument('--case', action='store_true',
                         help='case study')
-    parser.add_argument('--multi', type=str, default=5,
+    parser.add_argument('--multi', type=int, default=5,
                         help='times for experiment')
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
@@ -168,7 +168,7 @@ def train_one_epoch(model, optimizer, scheduler, train_num, train_file, args, lo
         # outputs = model(sentences)
         # loss = compute_loss(logits=outputs, target=labels, length=seq_lens)
         if args.is_fc:
-            criterion = FocalLoss(gamma=2, alpha=0.75)
+            criterion = FocalLoss(gamma=4, alpha=0.75)
         else:
             criterion = torch.nn.CrossEntropyLoss(weight)
         loss = criterion(outputs, cau_labels)
