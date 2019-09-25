@@ -330,6 +330,7 @@ def get_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
 def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
 
+    # token2id = {'<NULL>': 0, '<OOV>': 1, '<LEARN>': 2}
     token2id = {'<NULL>': 0, '<OOV>': 1}
     if emb_file is not None:
         assert vec_size is not None
@@ -337,6 +338,7 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             trained_embeddings = pkl.load(fin)
         fin.close()
         embedding_dict = set(trained_embeddings)
+        print('Num of tokens in corpus {}'.format(len(corpus_dict)))
         filtered_tokens = corpus_dict.intersection(embedding_dict)  # common
         oov_tokens = corpus_dict.difference(filtered_tokens)
         combined_tokens = []
@@ -344,10 +346,10 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
             if len(token.split('-')) > 1:
                 combined_tokens.append(token)
         combined_tokens = set(combined_tokens)
-        oov_tokens = oov_tokens.difference(combined_tokens)
+        # oov_tokens = oov_tokens.difference(combined_tokens)
         # token2id = {'<NULL>': 0, '<OOV>': 1}
         # embedding_mat = np.zeros([len(corpus_dict) + 2, vec_size])
-        embedding_mat = np.zeros([len(filtered_tokens) + 2, vec_size])
+        embedding_mat = np.zeros([len(filtered_tokens) + len(token2id), vec_size])
         for token in filtered_tokens:
             token2id[token] = len(token2id)
             embedding_mat[token2id[token]] = trained_embeddings[token]
@@ -367,19 +369,17 @@ def gen_embedding(data_type, corpus_dict, emb_file=None, vec_size=None):
                 embedding_mat = np.row_stack((embedding_mat, token_vec / in_emb))
         scale = 3.0 / max(1.0, (len(corpus_dict) + vec_size) / 2.0)
         embedding_mat[1] = np.random.uniform(-scale, scale, vec_size)
-        # for token in oov_tokens:
-        #     token2id[token] = len(token2id)
-        #     embedding_mat[token2id[token]] = np.random.uniform(-scale, scale, vec_size)\
         print('Filtered_tokens: {} Combined_tokens: {} OOV_tokens: {}'.format(len(filtered_tokens),
                                                                               combined,
                                                                               len(oov_tokens)))
     else:
-        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + 2, vec_size))
+        embedding_mat = np.random.uniform(-0.25, 0.25, (len(corpus_dict) + len(token2id), vec_size))
         embedding_mat[0] = np.zeros(vec_size)
         embedding_mat[1] = np.zeros(vec_size)
         for token in corpus_dict:
             token2id[token] = len(token2id)
-    id2token = dict([val, key] for key, val in token2id.items())
+    # id2token = dict([val, key] for key, val in token2id.items())
+    id2token = dict(zip(token2id.values(), token2id.keys()))
     # print(len(token2id), len(id2token), len(embedding_mat))
     return embedding_mat, token2id, id2token
 

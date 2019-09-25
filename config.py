@@ -6,7 +6,7 @@ import os.path as op
 class DefaultConfig(object):
     def __init__(self):
         self.prepare = True
-        self.build = False
+        self.build = True
         self.train = False
         self.evaluate = False
         self.case = False
@@ -45,9 +45,9 @@ class DefaultConfig(object):
         self.window_size = 10
         self.n_class = 2
 
-        self.task = 'training_8'
+        self.task = 'bootstrapped'
         self.model = 'MCDN'
-        self.train_file = 'train_training_8.csv'
+        self.train_file = 'altlex_train_bootstrapped.tsv'
         self.valid_file = 'altlex_gold.tsv'
         self.test_file = 'altlex_test.tsv'
         self.transfer_file1 = '2010_random_filtered.json'

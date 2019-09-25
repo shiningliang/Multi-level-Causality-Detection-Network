@@ -36,7 +36,7 @@ def parse_args():
                         help='evaluate the model on dev set')
     parser.add_argument('--case', action='store_true',
                         help='case study')
-    parser.add_argument('--multi', type=int, default=5,
+    parser.add_argument('--multi', type=int, default=3,
                         help='times for experiment')
     parser.add_argument('--gpu', type=str, default='0',
                         help='specify gpu device')
@@ -120,7 +120,7 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='MCDN',
+    path_settings.add_argument('--model', default='TB',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
