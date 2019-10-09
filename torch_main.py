@@ -84,7 +84,7 @@ def parse_args():
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--n_layer', type=int, default=2,
                                 help='num of layers')
-    model_settings.add_argument('--is_fc', type=bool, default=False,
+    model_settings.add_argument('--is_fc', type=bool, default=True,
                                 help='whether to use focal loss')
     model_settings.add_argument('--is_atten', type=bool, default=False,
                                 help='whether to use self attention')
@@ -120,13 +120,13 @@ def parse_args():
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--task', default='bootstrapped',
                                help='the task name')
-    path_settings.add_argument('--model', default='TB',
+    path_settings.add_argument('--model', default='MCDN',
                                help='the model name')
     path_settings.add_argument('--train_file', default='altlex_train_bootstrapped.tsv',
                                help='the train file name')
-    path_settings.add_argument('--valid_file', default='altlex_gold.tsv',
+    path_settings.add_argument('--valid_file', default='altlex_dev.tsv',
                                help='the valid file name')
-    path_settings.add_argument('--test_file', default='altlex_test.tsv',
+    path_settings.add_argument('--test_file', default='altlex_gold.tsv',
                                help='the test file name')
     path_settings.add_argument('--transfer_file1', default='2010_random_filtered.json',
                                help='the transfer file name')
@@ -337,12 +337,11 @@ def evaluate(args, file_paths):
     logger.info('Loading shape meta...')
     logger.info('Num valid data {} test data {}'.format(valid_num, test_num))
 
-    # model = torch.load(os.path.join(args.model_dir, 'model.pth'))
     args.dropout = {'emb': args.emb_dropout, 'layer': args.layer_dropout}
     model = getattr(models, args.model)(token_embeddings, args, logger).to(device=args.device)
     model.load_state_dict(torch.load(os.path.join(args.model_dir, '2019-09-03-173141_model.bin')))
 
-    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, valid_num, args.batch_eval, valid_file,
+    eval_metrics, fpr, tpr, precision, recall = evaluate_batch(model, test_num, args.batch_eval, test_file,
                                                                args.device, args.is_fc, 'eval', logger)
     logger.info('Eval Loss - {}'.format(eval_metrics['loss']))
     logger.info('Eval Acc - {}'.format(eval_metrics['acc']))

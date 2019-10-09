@@ -7,9 +7,9 @@ class DefaultConfig(object):
     def __init__(self):
         self.prepare = True
         self.build = True
-        self.train = False
-        self.evaluate = False
-        self.case = False
+        self.train = True
+        self.evaluate = True
+        self.case = True
         self.gpu = '0'
         self.seed = 23333
 
@@ -37,7 +37,7 @@ class DefaultConfig(object):
         self.is_pos = False
         self.is_sinusoid = True
         self.is_ffn = True
-        self.is_fc = False
+        self.is_fc = True
         self.n_kernel = 3
         self.n_kernels = [2, 3, 4]
         self.n_filter = 50
@@ -48,8 +48,8 @@ class DefaultConfig(object):
         self.task = 'bootstrapped'
         self.model = 'MCDN'
         self.train_file = 'altlex_train_bootstrapped.tsv'
-        self.valid_file = 'altlex_gold.tsv'
-        self.test_file = 'altlex_test.tsv'
+        self.valid_file = 'altlex_dev.tsv'
+        self.test_file = 'altlex_gold.tsv'
         self.transfer_file1 = '2010_random_filtered.json'
         self.transfer_file2 = '2010_full_filtered.json'
         self.raw_dir = 'data/raw_data/'
