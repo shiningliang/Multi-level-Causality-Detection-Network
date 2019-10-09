@@ -5,11 +5,11 @@ import os.path as op
 
 class DefaultConfig(object):
     def __init__(self):
-        self.prepare = True
-        self.build = True
-        self.train = True
-        self.evaluate = True
-        self.case = True
+        self.prepare = False
+        self.build = False
+        self.train = False
+        self.evaluate = False
+        self.case = False
         self.gpu = '0'
         self.seed = 23333
 
